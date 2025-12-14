@@ -59,8 +59,10 @@ Run the [Jupyter Notebook](https://github.com/pavelkomarov/exportify/blob/master
 - 🎨 **Artistic Design**: Dark mode with modern UI, gradients, and smooth animations
 - 🔍 **Search & Sort**: Find and organize playlists with real-time search and multiple sort options
 - 📊 **Built-in Analysis**: Interactive data visualizations on the analysis page
+- 📤 **CSV Upload**: Upload exported CSV files and analyze them without Spotify authentication
 - 🎯 **Multiple Views**: Toggle between card and list views for playlists
 - 📱 **Responsive**: Optimized for all screen sizes with compact, margin-constrained layout
+- 🔒 **Privacy-Focused**: CSV analysis works entirely in your browser - data never leaves your device
 
 ### Development
 
@@ -74,9 +76,26 @@ python3 -m http.server 8000
 
 Then open [http://localhost:8000](http://localhost:8000) or [http://[::1]:8000](http://[::1]:8000). The Javascript can be invoked by interacting with this locally-served webpage.
 
-Data science analysis is available in two ways:
+Data science analysis is available in three ways:
 1. **Built-in Analysis Page**: Click "Analyze" on any playlist for interactive visualizations
-2. **Jupyter Notebook**: Run `taste_analysis.ipynb` with `python3 -m notebook`, then navigate to [http://localhost:8888](http://localhost:8888)
+2. **CSV Upload**: Upload any Spotify playlist CSV file (from exportify.net or your own exports) to analyze without authentication
+3. **Jupyter Notebook**: Run `taste_analysis.ipynb` with `python3 -m notebook`, then navigate to [http://localhost:8888](http://localhost:8888)
+
+### CSV Upload Feature
+
+Nexporify now supports uploading CSV files for analysis without requiring Spotify authentication:
+
+- **No login required**: Analyze playlists by uploading CSV files
+- **Privacy-focused**: All processing happens in your browser
+- **Works offline**: Once loaded, no internet connection needed
+- **Compatible**: Works with CSV exports from exportify.net or this app
+- **Instant visualization**: See charts and insights immediately
+
+Perfect for:
+- Analyzing shared playlists
+- Working without API access
+- Privacy-conscious users
+- Offline analysis
 
 ### Deployment
 

@@ -407,6 +407,106 @@ class PlaylistTable extends React.Component {
 
 // Handles exporting playlists as CSV files
 let PlaylistExporter = {
+	// Parse an uploaded CSV file and return the data as a string
+	async parseUploadedCSV(file) {
+		return new Promise((resolve, reject) => {
+			const reader = new FileReader();
+			
+			reader.onload = (e) => {
+				try {
+					const csvContent = e.target.result;
+					
+					// Basic validation
+					if (!csvContent || csvContent.trim().length === 0) {
+						reject(new Error('CSV file is empty'));
+						return;
+					}
+					
+					// Check for required headers
+					const lines = csvContent.split('\n');
+					if (lines.length < 2) {
+						reject(new Error('CSV file must contain headers and at least one data row'));
+						return;
+					}
+					
+					const headers = lines[0].toLowerCase();
+					const requiredHeaders = ['track name', 'artist name', 'album name'];
+					const missingHeaders = requiredHeaders.filter(h => !headers.includes(h));
+					
+					if (missingHeaders.length > 0) {
+						reject(new Error(`CSV missing required headers: ${missingHeaders.join(', ')}`));
+						return;
+					}
+					
+					console.log('CSV parsed successfully. Total lines:', lines.length - 1);
+					resolve(csvContent);
+				} catch (error) {
+					reject(new Error('Failed to parse CSV: ' + error.message));
+				}
+			};
+			
+			reader.onerror = () => {
+				reject(new Error('Failed to read file'));
+			};
+			
+			reader.readAsText(file);
+		});
+	},
+
+	// Analyze an uploaded CSV file
+	async analyzeFromUpload(file) {
+		const uploadStatus = document.getElementById('uploadStatus');
+		
+		try {
+			// Show processing message
+			if (uploadStatus) {
+				uploadStatus.className = 'upload-status processing';
+				uploadStatus.style.display = 'block';
+				uploadStatus.textContent = 'Processing CSV file...';
+			}
+			
+			// Parse the CSV
+			const csvContent = await this.parseUploadedCSV(file);
+			
+			// Create a fake playlist object for the analysis
+			const playlistName = file.name.replace('.csv', '').replace(/_/g, ' ');
+			const fakePlaylist = {
+				name: playlistName,
+				external_urls: { spotify: '#' },
+				images: [],
+				owner: { id: 'Uploaded CSV' },
+				tracks: { total: csvContent.split('\n').length - 1 }
+			};
+			
+			// Open analysis window
+			const analysisWindow = window.open('', '_blank');
+			if (!analysisWindow) {
+				throw new Error('Could not open analysis window. Please allow popups for this site.');
+			}
+			
+			// Generate and write the HTML
+			analysisWindow.document.write(this.generateAnalysisHTML(fakePlaylist, csvContent));
+			analysisWindow.document.close();
+			
+			// Show success message
+			if (uploadStatus) {
+				uploadStatus.className = 'upload-status success';
+				uploadStatus.textContent = '✓ CSV analyzed successfully! Analysis opened in new window.';
+				setTimeout(() => {
+					uploadStatus.style.display = 'none';
+				}, 3000);
+			}
+			
+		} catch (error) {
+			console.error('Error analyzing uploaded CSV:', error);
+			if (uploadStatus) {
+				uploadStatus.className = 'upload-status error';
+				uploadStatus.style.display = 'block';
+				uploadStatus.textContent = '✗ ' + error.message;
+			}
+		}
+	},
+
 	// Take the access token string and playlist object, generate a csv from it, and when that data is resolved and
 	// returned, save to a file.
 	async export(playlist, row) {

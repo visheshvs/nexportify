@@ -85,17 +85,48 @@
 					<button id="loginButton" type="submit" class="btn btn-primary" onclick="utils.authorize()">
 						Get Started
 					</button>
+					
+					<div class="upload-divider">
+						<span>or</span>
+					</div>
+					
+					<div class="upload-section">
+						<input type="file" accept=".csv" id="csvUploadInput" style="display: none;" />
+						<label for="csvUploadInput" class="upload-zone" id="uploadZone">
+							<div class="upload-icon">📊</div>
+							<div class="upload-text">Upload CSV File</div>
+							<div class="upload-hint">Drag & drop or click to browse</div>
+						</label>
+						<div id="uploadStatus" class="upload-status" style="display: none;"></div>
+					</div>
 				</div>
 				
 				<div class="hero-how-to">
 					<h3>How to Use</h3>
-					<ol class="hero-steps">
-						<li>Click "Get Started" to connect your Spotify account</li>
-						<li>Browse your playlists in card or list view</li>
-						<li>Click "Export" to download playlist data as CSV</li>
-						<li>Click "Analyze" to view interactive visualizations and insights</li>
-						<li>Explore your music patterns through beautiful data art</li>
-					</ol>
+					<div class="usage-options">
+						<div class="usage-option">
+							<h4>Option A - Connect Spotify</h4>
+							<ol class="hero-steps">
+								<li>Click "Get Started" to connect your Spotify account</li>
+								<li>Browse your playlists in card or list view</li>
+								<li>Click "Export" to download playlist data as CSV</li>
+								<li>Click "Analyze" for interactive visualizations</li>
+							</ol>
+						</div>
+						<div class="usage-option">
+							<h4>Option B - Upload CSV</h4>
+							<ol class="hero-steps">
+								<li>Export a playlist from <a href="https://exportify.net" target="_blank" rel="noopener">exportify.net</a> or similar</li>
+								<li>Upload the CSV file using the upload button above</li>
+								<li>View instant visualizations without authentication</li>
+								<li>All data stays local in your browser (privacy-focused)</li>
+							</ol>
+						</div>
+					</div>
+					<p class="upload-note">
+						<strong>Note:</strong> For full audio features analysis, ensure your CSV includes Danceability, Energy, Valence, and other audio metrics. 
+						CSV files from <a href="https://exportify.net" target="_blank" rel="noopener">exportify.net</a> include all required data.
+					</p>
 				</div>
 				
 				<div class="hero-credits">
@@ -150,10 +181,78 @@
 			lastScroll = currentScroll;
 		});
 
+		// CSV Upload handling
+		function setupCSVUpload() {
+			const fileInput = document.getElementById('csvUploadInput');
+			const uploadZone = document.getElementById('uploadZone');
+			const uploadStatus = document.getElementById('uploadStatus');
+			
+			if (!fileInput || !uploadZone) return;
+			
+			// File input change handler
+			fileInput.addEventListener('change', function(e) {
+				const file = e.target.files[0];
+				if (file) {
+					handleFileUpload(file);
+				}
+			});
+			
+			// Drag and drop handlers
+			uploadZone.addEventListener('dragover', function(e) {
+				e.preventDefault();
+				uploadZone.classList.add('dragover');
+			});
+			
+			uploadZone.addEventListener('dragleave', function(e) {
+				e.preventDefault();
+				uploadZone.classList.remove('dragover');
+			});
+			
+			uploadZone.addEventListener('drop', function(e) {
+				e.preventDefault();
+				uploadZone.classList.remove('dragover');
+				
+				const file = e.dataTransfer.files[0];
+				if (file) {
+					handleFileUpload(file);
+				}
+			});
+			
+			function handleFileUpload(file) {
+				// Validate file type
+				if (!file.name.toLowerCase().endsWith('.csv')) {
+					if (uploadStatus) {
+						uploadStatus.className = 'upload-status error';
+						uploadStatus.style.display = 'block';
+						uploadStatus.textContent = '✗ Please upload a CSV file';
+						setTimeout(() => { uploadStatus.style.display = 'none'; }, 3000);
+					}
+					return;
+				}
+				
+				// Validate file size (10MB limit)
+				if (file.size > 10 * 1024 * 1024) {
+					if (uploadStatus) {
+						uploadStatus.className = 'upload-status error';
+						uploadStatus.style.display = 'block';
+						uploadStatus.textContent = '✗ File too large. Maximum size is 10MB';
+						setTimeout(() => { uploadStatus.style.display = 'none'; }, 3000);
+					}
+					return;
+				}
+				
+				// Process the file
+				PlaylistExporter.analyzeFromUpload(file);
+			}
+		}
+		
 		// Update subtitle when playlists load
 		const originalOnload = window.onload;
 		window.onload = async function() {
 			if (originalOnload) await originalOnload();
+			
+			// Setup CSV upload after page loads
+			setupCSVUpload();
 		};
 	</script>
 </body>

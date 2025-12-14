@@ -504,6 +504,158 @@ a:hover {
 }
 
 /* ============================================
+   CSV UPLOAD SECTION
+   ============================================ */
+
+.upload-divider {
+  margin: var(--space-2xl) 0 var(--space-xl);
+  text-align: center;
+  position: relative;
+}
+
+.upload-divider::before,
+.upload-divider::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  width: 40%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+}
+
+.upload-divider::before {
+  left: 0;
+}
+
+.upload-divider::after {
+  right: 0;
+}
+
+.upload-divider span {
+  display: inline-block;
+  padding: 0 var(--space-md);
+  color: var(--text-tertiary);
+  font-size: var(--text-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  background: var(--bg-primary);
+}
+
+.upload-section {
+  margin-top: var(--space-xl);
+}
+
+.upload-zone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-2xl) var(--space-xl);
+  border: 2px dashed rgba(255, 255, 255, 0.2);
+  border-radius: var(--radius-lg);
+  background: rgba(255, 255, 255, 0.02);
+  cursor: pointer;
+  transition: all var(--transition-base);
+  min-height: 150px;
+}
+
+.upload-zone:hover {
+  border-color: var(--accent-primary);
+  background: rgba(29, 185, 84, 0.05);
+  box-shadow: var(--glow-primary-sm);
+  transform: translateY(-2px);
+}
+
+.upload-zone.dragover {
+  border-color: var(--accent-primary);
+  background: rgba(29, 185, 84, 0.1);
+  box-shadow: var(--glow-primary);
+  transform: scale(1.02);
+}
+
+.upload-icon {
+  font-size: 48px;
+  margin-bottom: var(--space-md);
+  opacity: 0.8;
+}
+
+.upload-text {
+  font-size: var(--text-lg);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-primary);
+  margin-bottom: var(--space-xs);
+}
+
+.upload-hint {
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
+}
+
+.upload-status {
+  margin-top: var(--space-md);
+  padding: var(--space-md);
+  border-radius: var(--radius-md);
+  text-align: center;
+  font-size: var(--text-sm);
+}
+
+.upload-status.success {
+  background: rgba(29, 185, 84, 0.1);
+  border: 1px solid var(--accent-primary);
+  color: var(--accent-primary);
+}
+
+.upload-status.error {
+  background: rgba(255, 107, 107, 0.1);
+  border: 1px solid #ff6b6b;
+  color: #ff6b6b;
+}
+
+.upload-status.processing {
+  background: rgba(0, 212, 255, 0.1);
+  border: 1px solid var(--accent-blue);
+  color: var(--accent-blue);
+}
+
+.usage-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: var(--space-xl);
+  margin-bottom: var(--space-lg);
+}
+
+.usage-option h4 {
+  font-size: var(--text-lg);
+  font-weight: var(--font-weight-bold);
+  color: var(--text-primary);
+  margin-bottom: var(--space-md);
+  background: var(--gradient-primary);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.upload-note {
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
+  padding: var(--space-md);
+  background: rgba(255, 255, 255, 0.03);
+  border-left: 3px solid var(--accent-primary);
+  border-radius: var(--radius-sm);
+  margin-top: var(--space-lg);
+  line-height: 1.6;
+}
+
+.upload-note strong {
+  color: var(--text-secondary);
+}
+
+.upload-note a {
+  color: var(--accent-primary);
+  text-decoration: underline;
+}
+
+/* ============================================
    PLAYLIST CARDS
    ============================================ */
 
