@@ -81,52 +81,64 @@
 					</div>
 				</div>
 				
-				<div id="heroActions" style="text-align: center; margin: var(--space-2xl) 0;">
-					<button id="loginButton" type="submit" class="btn btn-primary" onclick="utils.authorize()">
-						Get Started
-					</button>
-					
-					<div class="upload-divider">
-						<span>or</span>
-					</div>
-					
-					<div class="upload-section">
-						<input type="file" accept=".csv" id="csvUploadInput" style="display: none;" />
-						<label for="csvUploadInput" class="upload-zone" id="uploadZone">
-							<div class="upload-icon">📊</div>
-							<div class="upload-text">Upload CSV File</div>
-							<div class="upload-hint">Drag & drop or click to browse</div>
-						</label>
-						<div id="uploadStatus" class="upload-status" style="display: none;"></div>
+				<div class="hero-how-to">
+					<h3>Choose Your Path</h3>
+					<div class="usage-options">
+						<div class="usage-option advanced-path">
+							<h4>Advanced Analysis</h4>
+							<p class="path-subtitle">Full Data</p>
+							<p class="path-description">Complete audio features including danceability, energy, tempo, mood analysis, and more</p>
+							<ol class="hero-steps">
+								<li>Go to <a href="https://exportify.net" target="_blank" rel="noopener">exportify.net</a></li>
+								<li>Sign in with Spotify and export your playlist as CSV</li>
+								<li>Upload the CSV file below for detailed analysis</li>
+							</ol>
+							<p class="path-note">Includes all audio features and detailed insights</p>
+						</div>
+						<div class="usage-option simple-path">
+							<h4>Simple Analysis</h4>
+							<p class="path-subtitle">Quick Start</p>
+							<p class="path-description">Basic insights: genres, artists, release dates, and popularity</p>
+							<ol class="hero-steps">
+								<li>Sign in with Spotify using the button below</li>
+								<li>Browse your playlists</li>
+								<li>Click "Analyze" for instant basic insights</li>
+							</ol>
+							<p class="path-note">Faster, no export needed, works right away</p>
+						</div>
 					</div>
 				</div>
 				
-				<div class="hero-how-to">
-					<h3>How to Use</h3>
-					<div class="usage-options">
-						<div class="usage-option">
-							<h4>Option A - Connect Spotify</h4>
-							<ol class="hero-steps">
-								<li>Click "Get Started" to connect your Spotify account</li>
-								<li>Browse your playlists in card or list view</li>
-								<li>Click "Export" to download playlist data as CSV</li>
-								<li>Click "Analyze" for interactive visualizations</li>
-							</ol>
-						</div>
-						<div class="usage-option">
-							<h4>Option B - Upload CSV</h4>
-							<ol class="hero-steps">
-								<li>Export a playlist from <a href="https://exportify.net" target="_blank" rel="noopener">exportify.net</a> or similar</li>
-								<li>Upload the CSV file using the upload button above</li>
-								<li>View instant visualizations without authentication</li>
-								<li>All data stays local in your browser (privacy-focused)</li>
-							</ol>
+				<div id="heroActions" class="actions-container">
+					<div class="action-column">
+						<div class="action-label">Advanced Analysis</div>
+						<div class="upload-section">
+							<input type="file" accept=".csv" id="csvUploadInput" style="display: none;" />
+							<label for="csvUploadInput" class="upload-zone" id="uploadZone">
+								<div class="upload-icon">
+									<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+										<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+										<polyline points="17 8 12 3 7 8"></polyline>
+										<line x1="12" y1="3" x2="12" y2="15"></line>
+									</svg>
+								</div>
+								<div class="upload-text">Upload CSV</div>
+								<div class="upload-hint">from exportify.net</div>
+							</label>
+							<div id="uploadStatus" class="upload-status" style="display: none;"></div>
 						</div>
 					</div>
-					<p class="upload-note">
-						<strong>Note:</strong> For full audio features analysis, ensure your CSV includes Danceability, Energy, Valence, and other audio metrics. 
-						CSV files from <a href="https://exportify.net" target="_blank" rel="noopener">exportify.net</a> include all required data.
-					</p>
+					
+					<div class="divider-vertical">
+						<span>or</span>
+					</div>
+					
+					<div class="action-column">
+						<div class="action-label">Simple Analysis</div>
+						<button id="loginButton" type="submit" class="btn btn-primary" onclick="utils.authorize()">
+							Sign In with Spotify
+						</button>
+					</div>
 				</div>
 				
 				<div class="hero-credits">

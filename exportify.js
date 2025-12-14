@@ -1690,13 +1690,7 @@ let PlaylistExporter = {
 		}
 		@media (max-width: 768px) {
 			.header {
-				flex-direction: column;
 				padding: 60px 20px 40px;
-				gap: 30px;
-			}
-			.playlist-cover {
-				width: 200px;
-				height: 200px;
 			}
 			.visualizations {
 				padding: 60px 20px;
@@ -1726,12 +1720,9 @@ let PlaylistExporter = {
 </head>
 <body>
 	<div style="max-width: 1400px; margin: 0 auto; padding: 0 var(--space-xl);">
-		<div class="header" style="padding: 60px 0;">
-			<img src="${coverArtUrl}" alt="Playlist Cover" class="playlist-cover" onerror="this.src='https://placehold.co/300x300?text=No+Image'" />
-			<div class="header-content">
-				<h1>${this.escapeHtml(playlist.name)}</h1>
-				<p>Playlist Analysis</p>
-			</div>
+		<div class="header" style="padding: 60px 0; border-bottom: 1px solid rgba(255, 255, 255, 0.05); text-align: center;">
+			<h1>${this.escapeHtml(playlist.name)}</h1>
+			<p style="color: var(--text-secondary); font-size: var(--text-lg); margin-top: var(--space-sm);">Advanced Analysis - Full Audio Features</p>
 		</div>
 		<div class="summary-section" style="padding: 40px 0;">
 			<div class="stat-cards">
