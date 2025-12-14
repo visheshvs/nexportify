@@ -1246,6 +1246,9 @@ let PlaylistExporter = {
 			<div class="header-content">
 				<div class="simple-badge">Simple Analysis</div>
 				<h1>${escapeHtml(playlist.name)}</h1>
+				<button id="downloadCsvBtn" style="margin-top: 20px; padding: 12px 24px; background: var(--gradient-primary); border: none; border-radius: 50px; color: white; font-weight: 600; font-size: 14px; cursor: pointer; text-transform: uppercase; letter-spacing: 0.05em; transition: all 0.3s ease; box-shadow: 0 4px 15px rgba(29, 185, 84, 0.3);">
+					📥 Download CSV
+				</button>
 			</div>
 		</div>
 		
@@ -1378,6 +1381,31 @@ let PlaylistExporter = {
 		const topAlbums = ${JSON.stringify(topAlbums)};
 		const topLabels = ${JSON.stringify(topLabels)};
 		const yearData = ${JSON.stringify(yearData)};
+		const playlistName = ${JSON.stringify(escapeHtml(playlist.name))};
+		
+		// CSV Download functionality
+		document.getElementById('downloadCsvBtn').addEventListener('click', function() {
+			const csvContent = 'Track Name,Artist,Album,Release Date,Duration (ms),Popularity,Explicit\\n' +
+				processedData.map(track => 
+					'"' + (track.trackName || '').replace(/"/g, '""') + '",' +
+					'"' + (track.artist || '').replace(/"/g, '""') + '",' +
+					'"' + (track.album || '').replace(/"/g, '""') + '",' +
+					'"' + (track.releaseDate || '') + '",' +
+					track.duration + ',' +
+					track.popularity + ',' +
+					track.explicit
+				).join('\\n');
+			
+			const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+			const link = document.createElement('a');
+			const url = URL.createObjectURL(blob);
+			link.setAttribute('href', url);
+			link.setAttribute('download', playlistName.replace(/[^a-z0-9]/gi, '_') + '_simple_analysis.csv');
+			link.style.visibility = 'hidden';
+			document.body.appendChild(link);
+			link.click();
+			document.body.removeChild(link);
+		});
 		
 		// Scroll animations
 		const observerOptions = {
@@ -1578,6 +1606,14 @@ let PlaylistExporter = {
 			}
 		}).render();
 		
+		// Helper to escape HTML
+		function escapeHtml(text) {
+			if (!text) return '';
+			const div = document.createElement('div');
+			div.textContent = text;
+			return div.innerHTML;
+		}
+		
 		// Track Table
 		const trackTable = document.getElementById('trackTable');
 		if (trackTable) {
@@ -1596,9 +1632,9 @@ let PlaylistExporter = {
 				const duration = Math.floor(track.duration / 60000) + ':' + String(Math.floor((track.duration % 60000) / 1000)).padStart(2, '0');
 				tableHTML += '<tr style="border-bottom: 1px solid rgba(255, 255, 255, 0.05); transition: background 0.2s ease;" onmouseover="this.style.background=\\'rgba(29, 185, 84, 0.1)\\'" onmouseout="this.style.background=\\'transparent\\'">';
 				tableHTML += '<td style="padding: 14px; color: var(--text-tertiary);">' + (i + 1) + '</td>';
-				tableHTML += '<td style="padding: 14px; color: var(--text-primary); font-weight: 600;">' + (track.trackName || '-') + '</td>';
-				tableHTML += '<td style="padding: 14px; color: var(--text-secondary);">' + (track.artist || '-') + '</td>';
-				tableHTML += '<td style="padding: 14px; color: var(--text-secondary);">' + (track.album || '-') + '</td>';
+				tableHTML += '<td style="padding: 14px; color: var(--text-primary); font-weight: 600;">' + escapeHtml(track.trackName || '-') + '</td>';
+				tableHTML += '<td style="padding: 14px; color: var(--text-secondary);">' + escapeHtml(track.artist || '-') + '</td>';
+				tableHTML += '<td style="padding: 14px; color: var(--text-secondary);">' + escapeHtml(track.album || '-') + '</td>';
 				tableHTML += '<td style="padding: 14px; color: var(--text-secondary);">' + (track.releaseDate || '-') + '</td>';
 				tableHTML += '<td style="padding: 14px; color: var(--text-secondary);">' + duration + '</td>';
 				tableHTML += '<td style="padding: 14px; color: var(--text-secondary);">' + track.popularity + '</td>';
