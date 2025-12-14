@@ -40,6 +40,15 @@ const utils = {
 		let response = await fetch(url, { headers: { 'Authorization': 'Bearer ' + accessToken} })
 		if (response.ok) { 
 			const data = await response.json();
+			// Log audio-features API calls for debugging
+			if (url.includes('audio-features')) {
+				console.log('Audio features API call successful:', url);
+				console.log('Response structure:', {
+					hasAudioFeatures: !!data.audio_features,
+					audioFeaturesLength: data.audio_features?.length,
+					sampleFeature: data.audio_features?.[0]
+				});
+			}
 			return data;
 		}
 		else if (response.status == 401) { 
@@ -493,31 +502,60 @@ let PlaylistExporter = {
 		// Make queries for song audio features, 100 songs at a time.
 		let features_promise = Promise.all([data_promise, genre_promise, album_promise]).then(values => {
 			let data = values[0]
+			console.log('Starting audio features fetch for', data.flat().length, 'tracks');
 			let songs_promises = data.map((chunk, i) => { // remember data is an array of arrays, each subarray 100 tracks
-				let ids = chunk.map(song => song[2]?.split(':')[2]).filter(id => id).join(',') // the id lives in the third position, at the end of spotify:track:id
+				// Extract track IDs from the URI (format: spotify:track:ID)
+				let ids = chunk.map(song => {
+					if (!song || !song[2]) {
+						console.warn('Missing track URI in song data:', song);
+						return null;
+					}
+					let uri = song[2];
+					// Handle both quoted and unquoted URIs
+					let cleanUri = uri.replace(/^["']|["']$/g, '');
+					let trackId = cleanUri.split(':')[2];
+					if (!trackId) {
+						console.warn('Could not extract track ID from URI:', cleanUri);
+					}
+					return trackId;
+				}).filter(id => id).join(',');
+				
 				if (!ids) {
-					console.warn('No track IDs found for audio features request');
-					return Promise.resolve({ audio_features: [] });
+					console.warn('No track IDs found for audio features request in chunk', i);
+					return Promise.resolve({ audio_features: chunk.map(() => null) });
 				}
-				return utils.apiCall('https://api.spotify.com/v1/audio-features?ids='+ids, 100*i).catch(error => {
-					console.error('Error fetching audio features:', error);
-					// Return empty features array if API call fails
+				
+				console.log(`Fetching audio features for chunk ${i}, ${ids.split(',').length} tracks`);
+				let apiUrl = 'https://api.spotify.com/v1/audio-features?ids=' + ids;
+				
+				return utils.apiCall(apiUrl, 100*i).then(response => {
+					console.log(`Audio features response for chunk ${i}:`, response);
+					if (!response || !response.audio_features) {
+						console.error('Invalid response structure for chunk', i, ':', response);
+						return { audio_features: chunk.map(() => null) };
+					}
+					return response;
+				}).catch(error => {
+					console.error('Error fetching audio features for chunk', i, ':', error);
+					// Return null features array if API call fails
 					return { audio_features: chunk.map(() => null) };
 				});
 			})
 			return Promise.all(songs_promises).then(responses => {
+				console.log('All audio features responses received:', responses);
 				return responses.map((response, chunkIndex) => { // for each response
 					if (!response || !response.audio_features) {
-						console.warn('No audio_features in response for chunk', chunkIndex);
+						console.warn('No audio_features in response for chunk', chunkIndex, 'Response:', response);
 						// Return empty arrays for each track in this chunk
 						return data[chunkIndex]?.map(() => [null, null, null, null, null, null, null, null, null, null, null, null]) || [];
 					}
-					return response.audio_features.map(feats => {
+					return response.audio_features.map((feats, featIndex) => {
 						if (!feats) {
+							console.warn(`Track ${featIndex} in chunk ${chunkIndex} has no audio features (null from Spotify)`);
 							// Track has no audio features (null response from Spotify)
 							return [null, null, null, null, null, null, null, null, null, null, null, null];
 						}
-						return [
+						let features = [
 							feats?.danceability ?? null, 
 							feats?.energy ?? null, 
 							feats?.key ?? null, 
@@ -530,7 +568,11 @@ let PlaylistExporter = {
 							feats?.valence ?? null,
 							feats?.tempo ?? null, 
 							feats?.time_signature ?? null
-						]
+						];
+						if (featIndex === 0 && chunkIndex === 0) {
+							console.log('Sample audio features extracted:', features, 'from:', feats);
+						}
+						return features;
 					})
 				})
 			})
@@ -540,7 +582,14 @@ let PlaylistExporter = {
 		return Promise.all([data_promise, genre_promise, album_promise, features_promise]).then(values => {
 			let [data, artist_genres, record_labels, features] = values
 			data = data.flat() // get rid of the batch dimension (only 100 songs per call)
-			data.forEach(row => {
+			features = features.flat() // get rid of the batch dimension (only 100 songs per call)
+			
+			console.log('Combining data. Total tracks:', data.length, 'Total feature arrays:', features.length);
+			if (features.length > 0 && features[0]) {
+				console.log('Sample feature array:', features[0]);
+			}
+			
+			data.forEach((row, i) => {
 				// add genres
 				let artist_ids = row.shift()?.slice(1, -1).split(',') // strip the quotes from artist ids, and toss; user doesn't need to see ids
 				let deduplicated_genres = new Set(artist_ids?.map(a => artist_genres[a]).join(",").split(",")) // in case multiple artists
@@ -548,25 +597,19 @@ let PlaylistExporter = {
 				// add album details
 				let album_id = row.shift()
 				row.push('"'+record_labels[album_id]+'"')
-			})
-			// add features
-			features = features.flat() // get rid of the batch dimension (only 100 songs per call)
-			if (!features || features.length === 0) {
-				console.warn('No audio features data available. This might indicate an API issue.');
-				// Add empty values for all tracks if features are missing
-				data.forEach((row, i) => {
+				
+				// add features - MUST be done after shift() operations to maintain correct index
+				if (!features || features.length === 0) {
+					console.warn(`No audio features data available for track ${i}. Adding empty values.`);
 					for (let j = 0; j < 12; j++) row.push(''); // 12 audio feature fields
-				});
-			} else {
-				data.forEach((row, i) => {
-					if (features[i] && Array.isArray(features[i])) {
-						features[i].forEach(feat => row.push(feat ?? '')); // Use empty string for null values
-					} else {
-						// No features for this track, add empty values
-						for (let j = 0; j < 12; j++) row.push('');
-					}
-				});
-			}
+				} else if (features[i] && Array.isArray(features[i]) && features[i].length === 12) {
+					features[i].forEach(feat => row.push(feat !== null && feat !== undefined ? feat : '')); // Use empty string for null values
+				} else {
+					console.warn(`Track ${i} has invalid features array:`, features[i]);
+					// No features for this track, add empty values
+					for (let j = 0; j < 12; j++) row.push('');
+				}
+			})
 			// make a string
 			let csv = "Track URI,Track Name,Album Name,Artist Name(s),Release Date,Duration (ms),Popularity,Explicit,Added By,Added At,Genres,Record Label,Danceability,Energy,Key,Loudness,Mode,Speechiness,Acousticness,Instrumentalness,Liveness,Valence,Tempo,Time Signature\n"
 			data.forEach(row => { csv += row.join(",") + "\n" })
