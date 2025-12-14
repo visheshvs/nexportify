@@ -1,28 +1,5 @@
 // A collection of functions to create and send API queries
 const utils = {
-	// Determine which client ID to use based on the current domain
-	getClientId() {
-		const hostname = location.hostname;
-		const origin = location.origin;
-		
-		// Use original exportify.net client ID for these domains:
-		// - exportify.net
-		// - localhost
-		// - 127.0.0.1
-		// - [::1]
-		if (hostname === 'exportify.net' || 
-		    hostname === 'localhost' || 
-		    hostname === '127.0.0.1' || 
-		    hostname === '[::1]') {
-			console.log('Using original exportify.net client ID');
-			return 'd99b082b01d74d61a100c9a0e056380b';
-		}
-		
-		// Use custom client ID for GitHub Pages and other domains
-		console.log('Using custom client ID for domain:', hostname);
-		return 'd07d8c2ddb3646d4b4fb3781ffc6d2bc';
-	},
-	
 	// Send a request to the Spotify server to let it know we want a session. This is literally accomplished by navigating
 	// to a web address, which accomplishes a GET, with correct query params in tow. There the user may have to enter their
 	// Spotify credentials, after which they are redirected. Which client app wants access, which information exactly it wants
@@ -42,8 +19,7 @@ const utils = {
 		localStorage.setItem('code_verifier', code_verifier) // save the random string secret
 		// Get full redirect URI including path (for GitHub Pages subdirectory support)
 		let redirectUri = location.origin + location.pathname.replace(/\/$/, ''); // Remove trailing slash
-		let clientId = this.getClientId(); // Get appropriate client ID based on domain
-		location = "https://accounts.spotify.com/authorize?client_id=" + clientId +
+		location = "https://accounts.spotify.com/authorize?client_id=d07d8c2ddb3646d4b4fb3781ffc6d2bc" +
 			"&redirect_uri=" + encodeURIComponent(redirectUri) +
 			"&scope=playlist-read-private%20playlist-read-collaborative%20user-library-read" + // access to particular scopes of info defined here
 			"&response_type=code&code_challenge_method=S256&code_challenge=" + code_challenge
@@ -548,13 +524,14 @@ let PlaylistExporter = {
 		}
 	},
 
-	// Analyze playlist data by opening it in a new tab as a table
+	// Analyze playlist data by opening it in a new tab (Simple mode - no audio features)
 	async analyze(playlist, row) {
 		const analyzeBtn = document.getElementById("analyze"+row)
 		if (analyzeBtn) analyzeBtn.textContent = 'Analyzing...' // spinner on button
 		try {
 			let csv = await this.csvData(playlist)
-			let html = this.generateAnalysisHTML(playlist, csv)
+			// Use simple analysis (without audio features)
+			let html = this.generateSimpleAnalysisHTML(playlist, csv)
 			let newWindow = window.open('', '_blank')
 			newWindow.document.write(html)
 			newWindow.document.close()
@@ -774,7 +751,313 @@ let PlaylistExporter = {
 		})
 	},
 
-	// Generate HTML for the analysis page with a minimal table design
+	// Generate HTML for simple analysis (without audio features)
+	generateSimpleAnalysisHTML(playlist, csv) {
+		const lines = csv.split('\n');
+		const headers = lines[0].split(',');
+		const data = lines.slice(1).filter(line => line.trim());
+		
+		// Helper function to escape HTML
+		const escapeHtml = (text) => {
+			if (!text) return '';
+			return String(text).replace(/[&<>"']/g, (match) => {
+				const escape = {
+					'&': '&amp;',
+					'<': '&lt;',
+					'>': '&gt;',
+					'"': '&quot;',
+					"'": '&#39;'
+				};
+				return escape[match];
+			});
+		};
+		
+		// Parse CSV row handling quoted fields
+		const parseCSVRow = (row) => {
+			const result = [];
+			let current = '';
+			let inQuotes = false;
+			
+			for (let i = 0; i < row.length; i++) {
+				const char = row[i];
+				if (char === '"') {
+					inQuotes = !inQuotes;
+				} else if (char === ',' && !inQuotes) {
+					result.push(current.trim());
+					current = '';
+				} else {
+					current += char;
+				}
+			}
+			result.push(current.trim());
+			return result;
+		};
+		
+		// Get column indices
+		const getColumnIndex = (name) => {
+			return headers.findIndex(h => h.toLowerCase().includes(name.toLowerCase()));
+		};
+		
+		const trackNameIdx = getColumnIndex('Track Name');
+		const artistIdx = getColumnIndex('Artist Name');
+		const albumIdx = getColumnIndex('Album Name');
+		const releaseDateIdx = getColumnIndex('Release Date');
+		const popularityIdx = getColumnIndex('Popularity');
+		const durationIdx = getColumnIndex('Duration');
+		const genresIdx = getColumnIndex('Genres');
+		const explicitIdx = getColumnIndex('Explicit');
+		const addedAtIdx = getColumnIndex('Added At');
+		
+		// Process data
+		const processedData = data.map(row => {
+			const fields = parseCSVRow(row);
+			return {
+				trackName: fields[trackNameIdx]?.replace(/^"|"$/g, ''),
+				artist: fields[artistIdx]?.replace(/^"|"$/g, ''),
+				album: fields[albumIdx]?.replace(/^"|"$/g, ''),
+				releaseDate: fields[releaseDateIdx]?.replace(/^"|"$/g, ''),
+				popularity: parseInt(fields[popularityIdx]) || 0,
+				duration: parseInt(fields[durationIdx]) || 0,
+				genres: fields[genresIdx]?.replace(/^"|"$/g, '').split(',').filter(g => g.trim()),
+				explicit: fields[explicitIdx]?.toLowerCase() === 'true',
+				addedAt: fields[addedAtIdx]?.replace(/^"|"$/g, '')
+			};
+		}).filter(row => row.trackName);
+		
+		const totalTracks = processedData.length;
+		const avgPopularity = processedData.reduce((sum, t) => sum + t.popularity, 0) / totalTracks;
+		const totalDuration = processedData.reduce((sum, t) => sum + t.duration, 0);
+		const explicitCount = processedData.filter(t => t.explicit).length;
+		
+		// Genre analysis
+		const genreCount = {};
+		processedData.forEach(track => {
+			track.genres.forEach(genre => {
+				if (genre) genreCount[genre] = (genreCount[genre] || 0) + 1;
+			});
+		});
+		const topGenres = Object.entries(genreCount)
+			.sort((a, b) => b[1] - a[1])
+			.slice(0, 10);
+		
+		// Artist analysis
+		const artistCount = {};
+		processedData.forEach(track => {
+			if (track.artist) artistCount[track.artist] = (artistCount[track.artist] || 0) + 1;
+		});
+		const topArtists = Object.entries(artistCount)
+			.sort((a, b) => b[1] - a[1])
+			.slice(0, 10);
+		
+		// Year analysis
+		const yearCount = {};
+		processedData.forEach(track => {
+			if (track.releaseDate) {
+				const year = track.releaseDate.substring(0, 4);
+				yearCount[year] = (yearCount[year] || 0) + 1;
+			}
+		});
+		const yearData = Object.entries(yearCount).sort((a, b) => a[0] - b[0]);
+		
+		const coverArtUrl = playlist.images && playlist.images.length > 0 
+			? playlist.images[0].url 
+			: 'https://placehold.co/300x300?text=No+Image';
+		
+		return `<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>${escapeHtml(playlist.name)} - Simple Analysis</title>
+	<link rel="stylesheet" href="styles/artistic-theme.css">
+	<script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+	<style>
+		body {
+			background: var(--bg-primary);
+			color: var(--text-primary);
+			font-family: 'Inter', sans-serif;
+			margin: 0;
+			padding: 0;
+			min-height: 100vh;
+		}
+		.page-container {
+			max-width: 1400px;
+			margin: 0 auto;
+			padding: 0 var(--space-xl);
+			position: relative;
+			z-index: 2;
+		}
+		.simple-badge {
+			display: inline-block;
+			padding: var(--space-xs) var(--space-sm);
+			background: var(--gradient-primary);
+			border-radius: var(--radius-full);
+			font-size: var(--text-xs);
+			font-weight: var(--font-weight-bold);
+			text-transform: uppercase;
+			letter-spacing: 0.05em;
+			margin-bottom: var(--space-md);
+		}
+		.info-note {
+			background: rgba(0, 212, 255, 0.1);
+			border-left: 3px solid var(--accent-blue);
+			padding: var(--space-md);
+			border-radius: var(--radius-sm);
+			margin: var(--space-lg) 0;
+			font-size: var(--text-sm);
+		}
+	</style>
+</head>
+<body>
+	<div class="page-container">
+		<div class="header" style="padding: 60px 0;">
+			<img src="${coverArtUrl}" alt="Playlist Cover" class="playlist-cover" onerror="this.src='https://placehold.co/300x300?text=No+Image'" />
+			<div class="header-content">
+				<div class="simple-badge">⚡ Simple Analysis</div>
+				<h1>${escapeHtml(playlist.name)}</h1>
+				<p>Basic Playlist Insights</p>
+			</div>
+		</div>
+		
+		<div class="info-note">
+			<strong>ℹ️ Simple Analysis Mode:</strong> This shows basic playlist data without audio features (danceability, energy, tempo, etc.). 
+			For complete analysis with all audio characteristics, export from <a href="https://exportify.net" target="_blank" style="color: var(--accent-blue);">exportify.net</a> and upload the CSV.
+		</div>
+		
+		<section class="summary-section">
+			<h2 class="section-header">Playlist Overview</h2>
+			<div class="stats-grid">
+				<div class="stat-card">
+					<div class="stat-card-value">${totalTracks}</div>
+					<div class="stat-card-label">Total Tracks</div>
+				</div>
+				<div class="stat-card">
+					<div class="stat-card-value">${avgPopularity.toFixed(0)}</div>
+					<div class="stat-card-label">Avg Popularity</div>
+				</div>
+				<div class="stat-card">
+					<div class="stat-card-value">${Math.floor(totalDuration / 60000)} min</div>
+					<div class="stat-card-label">Total Duration</div>
+				</div>
+				<div class="stat-card">
+					<div class="stat-card-value">${explicitCount}</div>
+					<div class="stat-card-label">Explicit Tracks</div>
+				</div>
+			</div>
+		</section>
+		
+		<section class="viz-section">
+			<h2 class="section-header">Genre Distribution</h2>
+			<div class="chart-container">
+				<div id="genreChart" class="chart-wrapper"></div>
+			</div>
+		</section>
+		
+		<section class="viz-section">
+			<h2 class="section-header">Top Artists</h2>
+			<div class="chart-container">
+				<div id="artistChart" class="chart-wrapper"></div>
+			</div>
+		</section>
+		
+		<section class="viz-section">
+			<h2 class="section-header">Release Timeline</h2>
+			<div class="chart-container">
+				<div id="yearChart" class="chart-wrapper"></div>
+			</div>
+		</section>
+		
+		<section class="viz-section">
+			<h2 class="section-header">Popularity Distribution</h2>
+			<div class="chart-container">
+				<div id="popularityChart" class="chart-wrapper"></div>
+			</div>
+		</section>
+	</div>
+	
+	<footer class="main-footer" style="background: var(--bg-elevated); border-top: 1px solid rgba(255, 255, 255, 0.05); padding: var(--space-xl) 0; margin-top: var(--space-4xl);">
+		<div class="footer-content" style="max-width: 1400px; margin: 0 auto; padding: 0 var(--space-xl); text-align: center;">
+			<p class="footer-text" style="font-size: var(--text-base); color: var(--text-secondary); margin-bottom: var(--space-sm); display: flex; align-items: center; justify-content: center; gap: var(--space-sm); flex-wrap: wrap;">
+				<span style="color: var(--text-primary); font-weight: var(--font-weight-semibold);">Nexporify - Open Source Music Analytics</span>
+				<a href="https://github.com/visheshvs/exportify" target="_blank" rel="noopener" style="color: var(--accent-primary); text-decoration: none; transition: color 0.3s ease;">View on GitHub</a>
+			</p>
+			<p class="footer-credit" style="font-size: var(--text-sm); color: var(--text-tertiary);">
+				Based on original work by <a href="https://github.com/pavelkomarov/exportify" target="_blank" rel="noopener" style="color: var(--accent-primary); text-decoration: none; transition: color 0.3s ease;">pavelkomarov/exportify</a>
+			</p>
+		</div>
+	</footer>
+	
+	<script>
+		const processedData = ${JSON.stringify(processedData)};
+		const topGenres = ${JSON.stringify(topGenres)};
+		const topArtists = ${JSON.stringify(topArtists)};
+		const yearData = ${JSON.stringify(yearData)};
+		
+		// Genre Chart
+		new ApexCharts(document.querySelector("#genreChart"), {
+			series: [{
+				data: topGenres.map(([genre, count]) => count)
+			}],
+			chart: { type: 'bar', height: 400, background: 'transparent', toolbar: { show: false } },
+			plotOptions: { bar: { horizontal: true, distributed: true } },
+			colors: ['#1DB954', '#1ed760', '#00d9ff', '#667eea', '#764ba2', '#f093fb', '#4facfe', '#00f2fe', '#43e97b', '#38f9d7'],
+			xaxis: { categories: topGenres.map(([genre]) => genre), labels: { style: { colors: '#FFFFFF' } } },
+			yaxis: { labels: { style: { colors: '#FFFFFF' } } },
+			tooltip: { theme: 'dark' },
+			legend: { show: false }
+		}).render();
+		
+		// Artist Chart
+		new ApexCharts(document.querySelector("#artistChart"), {
+			series: [{
+				data: topArtists.map(([artist, count]) => count)
+			}],
+			chart: { type: 'bar', height: 400, background: 'transparent', toolbar: { show: false } },
+			plotOptions: { bar: { horizontal: true, distributed: true } },
+			colors: ['#1DB954', '#1ed760', '#00d9ff', '#667eea', '#764ba2', '#f093fb', '#4facfe', '#00f2fe', '#43e97b', '#38f9d7'],
+			xaxis: { categories: topArtists.map(([artist]) => artist), labels: { style: { colors: '#FFFFFF' } } },
+			yaxis: { labels: { style: { colors: '#FFFFFF' } } },
+			tooltip: { theme: 'dark' },
+			legend: { show: false }
+		}).render();
+		
+		// Year Chart
+		new ApexCharts(document.querySelector("#yearChart"), {
+			series: [{ name: 'Tracks', data: yearData.map(([year, count]) => count) }],
+			chart: { type: 'line', height: 350, background: 'transparent', toolbar: { show: false } },
+			stroke: { curve: 'smooth', width: 3, colors: ['#1DB954'] },
+			xaxis: { categories: yearData.map(([year]) => year), labels: { style: { colors: '#FFFFFF' } } },
+			yaxis: { labels: { style: { colors: '#FFFFFF' } } },
+			tooltip: { theme: 'dark' },
+			grid: { borderColor: 'rgba(255, 255, 255, 0.1)' }
+		}).render();
+		
+		// Popularity Distribution
+		const popularityBuckets = { '0-20': 0, '21-40': 0, '41-60': 0, '61-80': 0, '81-100': 0 };
+		processedData.forEach(track => {
+			const pop = track.popularity;
+			if (pop <= 20) popularityBuckets['0-20']++;
+			else if (pop <= 40) popularityBuckets['21-40']++;
+			else if (pop <= 60) popularityBuckets['41-60']++;
+			else if (pop <= 80) popularityBuckets['61-80']++;
+			else popularityBuckets['81-100']++;
+		});
+		
+		new ApexCharts(document.querySelector("#popularityChart"), {
+			series: [{ name: 'Tracks', data: Object.values(popularityBuckets) }],
+			chart: { type: 'bar', height: 350, background: 'transparent', toolbar: { show: false } },
+			colors: ['#1DB954'],
+			xaxis: { categories: Object.keys(popularityBuckets), labels: { style: { colors: '#FFFFFF' } } },
+			yaxis: { labels: { style: { colors: '#FFFFFF' } } },
+			tooltip: { theme: 'dark' },
+			grid: { borderColor: 'rgba(255, 255, 255, 0.1)' }
+		}).render();
+	</script>
+</body>
+</html>`;
+	},
+	
+	// Generate HTML for full analysis page (with audio features)
 	generateAnalysisHTML(playlist, csv) {
 		// Parse CSV into rows
 		let lines = csv.trim().split('\n')
@@ -3211,9 +3494,8 @@ onload = async () => {
 
 		// Get full redirect URI including path (for GitHub Pages subdirectory support)
 		let redirectUri = location.origin + location.pathname.replace(/\/$/, ''); // Remove trailing slash
-		let clientId = utils.getClientId(); // Get appropriate client ID based on domain
 		let response = await fetch("https://accounts.spotify.com/api/token", { method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-			body: new URLSearchParams({client_id: clientId, grant_type: 'authorization_code', code: code, redirect_uri: redirectUri,
+			body: new URLSearchParams({client_id: "d07d8c2ddb3646d4b4fb3781ffc6d2bc", grant_type: 'authorization_code', code: code, redirect_uri: redirectUri,
 				code_verifier: localStorage.getItem('code_verifier')}) }) // POST to get the access token, then fish it out of the response body
 		localStorage.setItem('access_token', (await response.json()).access_token) // https://stackoverflow.com/questions/59555534/why-is-json-asynchronous
 		localStorage.setItem('access_token_timestamp', Date.now())
