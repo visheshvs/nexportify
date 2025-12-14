@@ -31,8 +31,17 @@ const utils = {
 	// https://eloquentjavascript.net/11_async.html
 	async apiCall(url, delay=0, bad_gateway_retries=2) {
 		await new Promise(r => setTimeout(r, delay)) // JavaScript equivalent of sleep(delay), to stay under rate limits ;)
-		let response = await fetch(url, { headers: { 'Authorization': 'Bearer ' + localStorage.getItem('access_token')} })
-		if (response.ok) { return response.json() }
+		const accessToken = localStorage.getItem('access_token');
+		if (!accessToken) {
+			console.error('No access token found. Please re-authenticate.');
+			location = location.origin + location.pathname.split('#')[0].split('?')[0];
+			return;
+		}
+		let response = await fetch(url, { headers: { 'Authorization': 'Bearer ' + accessToken} })
+		if (response.ok) { 
+			const data = await response.json();
+			return data;
+		}
 		else if (response.status == 401) { 
 			// Return to home page after auth token expiry, maintaining subdirectory path
 			location = location.origin + location.pathname.split('#')[0].split('?')[0]
@@ -485,15 +494,43 @@ let PlaylistExporter = {
 		let features_promise = Promise.all([data_promise, genre_promise, album_promise]).then(values => {
 			let data = values[0]
 			let songs_promises = data.map((chunk, i) => { // remember data is an array of arrays, each subarray 100 tracks
-				let ids = chunk.map(song => song[2]?.split(':')[2]).join(',') // the id lives in the third position, at the end of spotify:track:id
-				return utils.apiCall('https://api.spotify.com/v1/audio-features?ids='+ids, 100*i)
+				let ids = chunk.map(song => song[2]?.split(':')[2]).filter(id => id).join(',') // the id lives in the third position, at the end of spotify:track:id
+				if (!ids) {
+					console.warn('No track IDs found for audio features request');
+					return Promise.resolve({ audio_features: [] });
+				}
+				return utils.apiCall('https://api.spotify.com/v1/audio-features?ids='+ids, 100*i).catch(error => {
+					console.error('Error fetching audio features:', error);
+					// Return empty features array if API call fails
+					return { audio_features: chunk.map(() => null) };
+				});
 			})
 			return Promise.all(songs_promises).then(responses => {
-				return responses.map(response => { // for each response
-					return response?.audio_features?.map(feats => {
-						return [feats?.danceability, feats?.energy, feats?.key, feats?.loudness, feats?.mode,
-							feats?.speechiness, feats?.acousticness, feats?.instrumentalness, feats?.liveness, feats?.valence,
-							feats?.tempo, feats?.time_signature] // Safety-checking question marks
+				return responses.map((response, chunkIndex) => { // for each response
+					if (!response || !response.audio_features) {
+						console.warn('No audio_features in response for chunk', chunkIndex);
+						// Return empty arrays for each track in this chunk
+						return data[chunkIndex]?.map(() => [null, null, null, null, null, null, null, null, null, null, null, null]) || [];
+					}
+					return response.audio_features.map(feats => {
+						if (!feats) {
+							// Track has no audio features (null response from Spotify)
+							return [null, null, null, null, null, null, null, null, null, null, null, null];
+						}
+						return [
+							feats?.danceability ?? null, 
+							feats?.energy ?? null, 
+							feats?.key ?? null, 
+							feats?.loudness ?? null, 
+							feats?.mode ?? null,
+							feats?.speechiness ?? null, 
+							feats?.acousticness ?? null, 
+							feats?.instrumentalness ?? null, 
+							feats?.liveness ?? null, 
+							feats?.valence ?? null,
+							feats?.tempo ?? null, 
+							feats?.time_signature ?? null
+						]
 					})
 				})
 			})
@@ -514,7 +551,22 @@ let PlaylistExporter = {
 			})
 			// add features
 			features = features.flat() // get rid of the batch dimension (only 100 songs per call)
-			data.forEach((row, i) => features[i]?.forEach(feat => row.push(feat)))
+			if (!features || features.length === 0) {
+				console.warn('No audio features data available. This might indicate an API issue.');
+				// Add empty values for all tracks if features are missing
+				data.forEach((row, i) => {
+					for (let j = 0; j < 12; j++) row.push(''); // 12 audio feature fields
+				});
+			} else {
+				data.forEach((row, i) => {
+					if (features[i] && Array.isArray(features[i])) {
+						features[i].forEach(feat => row.push(feat ?? '')); // Use empty string for null values
+					} else {
+						// No features for this track, add empty values
+						for (let j = 0; j < 12; j++) row.push('');
+					}
+				});
+			}
 			// make a string
 			let csv = "Track URI,Track Name,Album Name,Artist Name(s),Release Date,Duration (ms),Popularity,Explicit,Added By,Added At,Genres,Record Label,Danceability,Energy,Key,Loudness,Mode,Speechiness,Acousticness,Instrumentalness,Liveness,Valence,Tempo,Time Signature\n"
 			data.forEach(row => { csv += row.join(",") + "\n" })
