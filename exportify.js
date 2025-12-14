@@ -33,7 +33,10 @@ const utils = {
 		await new Promise(r => setTimeout(r, delay)) // JavaScript equivalent of sleep(delay), to stay under rate limits ;)
 		let response = await fetch(url, { headers: { 'Authorization': 'Bearer ' + localStorage.getItem('access_token')} })
 		if (response.ok) { return response.json() }
-		else if (response.status == 401) { location = location.href.split('#')[0] } // Return to home page after auth token expiry
+		else if (response.status == 401) { 
+			// Return to home page after auth token expiry, maintaining subdirectory path
+			location = location.origin + location.pathname.split('#')[0].split('?')[0]
+		}
 		else if (response.status == 429) {
 			//if (!error.innerHTML.includes("fa-bolt")) { error.innerHTML += '<p><i class="fa fa-bolt" style="font-size: 50px; margin-bottom: 20px">\
 			//	</i></p><p>Exportify has encountered <a target="_blank" href="https://developer.spotify.com/documentation/web-api/concepts/rate-limits">\
@@ -54,7 +57,8 @@ const utils = {
 	// second, which is almost always long enough for the logout request to go through. Scratch that: just wipe data and reload page.
 	logout() {
 		localStorage.clear() // otherwise when the page is reloaded it still just finds and uses the access_token
-		location = location.origin //let logout = open("https://www.spotify.com/logout"); setTimeout(() => {logout.close(); location = location.origin}, 1000)
+		// Logout: redirect to home page, maintaining subdirectory path
+		location = location.origin + location.pathname.split('#')[0].split('?')[0] //let logout = open("https://www.spotify.com/logout"); setTimeout(() => {logout.close(); location = location.origin + location.pathname}, 1000)
 	}
 }
 
@@ -2949,7 +2953,9 @@ let PlaylistExporter = {
 onload = async () => {
 	let code = new URLSearchParams(location.search).get('code') // try to snag a code out of the url, in case this is after authorize()
 	if (code) {
-		history.replaceState({}, '', '/') // get rid of the ugly code string from the browser bar
+		// Get rid of the ugly code string from the browser bar, maintaining subdirectory path
+		let cleanPath = location.pathname.split('?')[0].split('#')[0]; // Remove query and hash
+		history.replaceState({}, '', cleanPath) // Maintain subdirectory path
 
 		// Get full redirect URI including path (for GitHub Pages subdirectory support)
 		let redirectUri = location.origin + location.pathname.replace(/\/$/, ''); // Remove trailing slash
