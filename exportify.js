@@ -318,7 +318,7 @@ class PlaylistTable extends React.Component {
 						onClick: () => PlaylistExporter.exportAll(this.state.playlists) 
 					}, "Export All")),
 				// Playlist items (cards or list)
-				this.state.playlists.map((playlist, i) =>
+						this.state.playlists.map((playlist, i) =>
 					viewMode === 'cards' ?
 					React.createElement("div", { 
 						key: i, 
@@ -829,6 +829,16 @@ let PlaylistExporter = {
 		const totalDuration = processedData.reduce((sum, t) => sum + t.duration, 0);
 		const explicitCount = processedData.filter(t => t.explicit).length;
 		
+		// Count unique artists, albums, genres
+		const uniqueArtists = new Set(processedData.map(t => t.artist).filter(a => a));
+		const uniqueAlbums = new Set(processedData.map(t => t.album).filter(a => a));
+		const uniqueGenresSet = new Set();
+		processedData.forEach(track => {
+			track.genres.forEach(genre => {
+				if (genre) uniqueGenresSet.add(genre);
+			});
+		});
+		
 		// Genre analysis
 		const genreCount = {};
 		processedData.forEach(track => {
@@ -846,6 +856,24 @@ let PlaylistExporter = {
 			if (track.artist) artistCount[track.artist] = (artistCount[track.artist] || 0) + 1;
 		});
 		const topArtists = Object.entries(artistCount)
+			.sort((a, b) => b[1] - a[1])
+			.slice(0, 10);
+		
+		// Album analysis
+		const albumCount = {};
+		processedData.forEach(track => {
+			if (track.album) albumCount[track.album] = (albumCount[track.album] || 0) + 1;
+		});
+		const topAlbums = Object.entries(albumCount)
+			.sort((a, b) => b[1] - a[1])
+			.slice(0, 10);
+		
+		// Label analysis (if available in data)
+		const labelCount = {};
+		processedData.forEach(track => {
+			if (track.label) labelCount[track.label] = (labelCount[track.label] || 0) + 1;
+		});
+		const topLabels = Object.entries(labelCount)
 			.sort((a, b) => b[1] - a[1])
 			.slice(0, 10);
 		
@@ -872,39 +900,340 @@ let PlaylistExporter = {
 	<link rel="stylesheet" href="styles/artistic-theme.css">
 	<script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
 	<style>
-		body {
-			background: var(--bg-primary);
-			color: var(--text-primary);
-			font-family: 'Inter', sans-serif;
+		* {
 			margin: 0;
 			padding: 0;
-			min-height: 100vh;
+			box-sizing: border-box;
 		}
-		.page-container {
-			max-width: 1400px;
-			margin: 0 auto;
-			padding: 0 var(--space-xl);
+		@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&display=swap');
+		:root {
+			--bg-primary: #0a0a0a;
+			--bg-secondary: #121212;
+			--bg-elevated: #1a1a1a;
+			--accent-primary: #1DB954;
+			--accent-blue: #00D4FF;
+			--accent-magenta: #FF00E5;
+			--text-primary: #FFFFFF;
+			--text-secondary: rgba(255, 255, 255, 0.7);
+			--text-tertiary: rgba(255, 255, 255, 0.5);
+			--space-xl: 40px;
+			--space-2xl: 60px;
+			--space-3xl: 80px;
+			--radius-sm: 8px;
+			--radius-md: 12px;
+			--radius-lg: 16px;
+		}
+		body {
+			font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+			background: var(--bg-primary);
+			background-image: linear-gradient(180deg, #0a0a0a 0%, #121212 50%, #1a1a1a 100%);
+			padding: 0;
+			color: var(--text-primary);
+			overflow-x: hidden;
+			-webkit-font-smoothing: antialiased;
+		}
+		body::before {
+			content: '';
+			position: fixed;
+			top: 0;
+			left: 0;
+			width: 100%;
+			height: 100%;
+			background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.03'/%3E%3C/svg%3E");
+			pointer-events: none;
+			z-index: 1;
+		}
+		.header {
+			background: linear-gradient(135deg, rgba(29, 185, 84, 0.2) 0%, rgba(0, 212, 255, 0.15) 100%);
+			backdrop-filter: blur(20px);
+			border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+			color: var(--text-primary);
+			padding: 80px 40px 60px;
+			text-align: center;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			gap: 40px;
+			position: relative;
+			overflow: hidden;
+		}
+		.header::before {
+			content: '';
+			position: absolute;
+			width: 500px;
+			height: 500px;
+			background: radial-gradient(circle, rgba(29, 185, 84, 0.1) 0%, transparent 70%);
+			top: -250px;
+			right: -250px;
+			border-radius: 50%;
+			filter: blur(60px);
+		}
+		.playlist-cover {
+			width: 280px;
+			height: 280px;
+			border-radius: 20px;
+			box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6), 0 0 40px rgba(29, 185, 84, 0.3);
+			object-fit: cover;
+			transition: transform 0.5s ease, box-shadow 0.5s ease;
+		}
+		.playlist-cover:hover {
+			transform: scale(1.05);
+			box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8), 0 0 60px rgba(29, 185, 84, 0.5);
+		}
+		.header-content {
+			flex: 1;
 			position: relative;
 			z-index: 2;
 		}
+		.header h1 {
+			font-size: clamp(32px, 5vw, 64px);
+			font-weight: 900;
+			margin-bottom: 10px;
+			letter-spacing: -0.03em;
+			background: linear-gradient(135deg, #1DB954 0%, #00D4FF 100%);
+			-webkit-background-clip: text;
+			-webkit-text-fill-color: transparent;
+			background-clip: text;
+		}
+		.header p {
+			opacity: 0.8;
+			font-size: 18px;
+			color: var(--text-secondary);
+			font-weight: 500;
+		}
 		.simple-badge {
 			display: inline-block;
-			padding: var(--space-xs) var(--space-sm);
-			background: var(--gradient-primary);
-			border-radius: var(--radius-full);
-			font-size: var(--text-xs);
-			font-weight: var(--font-weight-bold);
+			padding: 8px 16px;
+			background: linear-gradient(135deg, #1DB954 0%, #00D4FF 100%);
+			border-radius: 50px;
+			font-size: 11px;
+			font-weight: 700;
 			text-transform: uppercase;
 			letter-spacing: 0.05em;
-			margin-bottom: var(--space-md);
+			margin-bottom: 16px;
 		}
 		.info-note {
 			background: rgba(0, 212, 255, 0.1);
 			border-left: 3px solid var(--accent-blue);
-			padding: var(--space-md);
-			border-radius: var(--radius-sm);
-			margin: var(--space-lg) 0;
-			font-size: var(--text-sm);
+			padding: 20px;
+			border-radius: var(--radius-md);
+			margin: 40px 0;
+			font-size: 14px;
+			line-height: 1.6;
+		}
+		.info-note a {
+			color: var(--accent-blue);
+			text-decoration: none;
+			font-weight: 600;
+		}
+		.info-note a:hover {
+			text-decoration: underline;
+		}
+		.summary-section {
+			padding: 60px 40px;
+			background: transparent;
+		}
+		.stat-cards {
+			display: grid;
+			grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+			gap: 15px;
+			margin-bottom: 30px;
+		}
+		.stat-card {
+			background: var(--bg-elevated);
+			border-radius: 16px;
+			padding: 30px;
+			box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+			border: 1px solid rgba(255, 255, 255, 0.05);
+			text-align: center;
+			transition: transform 0.3s ease, box-shadow 0.3s ease;
+			position: relative;
+			overflow: hidden;
+		}
+		.stat-card::before {
+			content: '';
+			position: absolute;
+			top: 0;
+			left: 0;
+			width: 100%;
+			height: 100%;
+			background: linear-gradient(135deg, rgba(29, 185, 84, 0.1) 0%, rgba(0, 212, 255, 0.1) 100%);
+			opacity: 0;
+			transition: opacity 0.3s ease;
+		}
+		.stat-card:hover {
+			transform: translateY(-4px);
+			box-shadow: 0 12px 48px rgba(0, 0, 0, 0.5), 0 0 30px rgba(29, 185, 84, 0.3);
+		}
+		.stat-card:hover::before {
+			opacity: 1;
+		}
+		.stat-card-value {
+			font-size: clamp(32px, 4vw, 48px);
+			font-weight: 900;
+			background: linear-gradient(135deg, #1DB954 0%, #00D4FF 100%);
+			-webkit-background-clip: text;
+			-webkit-text-fill-color: transparent;
+			background-clip: text;
+			margin-bottom: 8px;
+			position: relative;
+			z-index: 1;
+		}
+		.stat-card-label {
+			font-size: 12px;
+			color: var(--text-tertiary);
+			text-transform: uppercase;
+			letter-spacing: 0.1em;
+			font-weight: 600;
+			position: relative;
+			z-index: 1;
+		}
+		.viz-section {
+			margin-bottom: 120px;
+			opacity: 0;
+			transform: translateY(30px);
+			transition: opacity 0.8s ease, transform 0.8s ease;
+		}
+		.viz-section.visible {
+			opacity: 1;
+			transform: translateY(0);
+		}
+		.section-header {
+			font-size: clamp(28px, 4vw, 48px);
+			font-weight: 900;
+			color: var(--text-primary);
+			margin-bottom: 60px;
+			padding-bottom: 20px;
+			border-bottom: 2px solid var(--accent-primary);
+			display: flex;
+			align-items: center;
+			gap: 20px;
+			letter-spacing: -0.02em;
+			position: relative;
+		}
+		.section-header::after {
+			content: '';
+			position: absolute;
+			bottom: -2px;
+			left: 0;
+			width: 100px;
+			height: 2px;
+			background: linear-gradient(90deg, var(--accent-primary), transparent);
+		}
+		.chart-grid {
+			display: grid;
+			grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+			gap: 25px;
+			margin-bottom: 30px;
+		}
+		.chart-container {
+			background: var(--bg-elevated);
+			border-radius: 20px;
+			padding: 30px;
+			box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+			border: 1px solid rgba(255, 255, 255, 0.05);
+			transition: transform 0.3s ease, box-shadow 0.3s ease;
+			position: relative;
+			overflow: hidden;
+		}
+		.chart-container::before {
+			content: '';
+			position: absolute;
+			top: 0;
+			left: 0;
+			width: 100%;
+			height: 100%;
+			background: linear-gradient(135deg, rgba(29, 185, 84, 0.05) 0%, rgba(0, 212, 255, 0.05) 100%);
+			opacity: 0;
+			transition: opacity 0.3s ease;
+			pointer-events: none;
+		}
+		.chart-container:hover {
+			transform: translateY(-4px);
+			box-shadow: 0 12px 48px rgba(0, 0, 0, 0.5), 0 0 30px rgba(29, 185, 84, 0.2);
+		}
+		.chart-container:hover::before {
+			opacity: 1;
+		}
+		.chart-title {
+			font-size: 18px;
+			font-weight: 700;
+			margin-bottom: 20px;
+			color: var(--text-primary);
+			letter-spacing: -0.01em;
+		}
+		.chart-wrapper {
+			min-height: 300px;
+		}
+		.track-list {
+			background: var(--bg-elevated);
+			border-radius: 20px;
+			padding: 30px;
+			box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+			border: 1px solid rgba(255, 255, 255, 0.05);
+		}
+		.track-list-title {
+			font-size: 18px;
+			font-weight: 700;
+			margin-bottom: 20px;
+			color: var(--text-primary);
+			letter-spacing: -0.01em;
+			padding-bottom: 15px;
+			border-bottom: 2px solid var(--accent-primary);
+		}
+		.track-list-item {
+			padding: 16px;
+			border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+			display: flex;
+			justify-content: space-between;
+			align-items: center;
+			transition: background 0.2s ease, transform 0.2s ease;
+			border-radius: 8px;
+			margin-bottom: 4px;
+		}
+		.track-list-item:last-child {
+			border-bottom: none;
+			margin-bottom: 0;
+		}
+		.track-list-item:hover {
+			background: rgba(29, 185, 84, 0.1);
+			transform: translateX(4px);
+		}
+		.lists-container {
+			display: grid;
+			grid-template-columns: 1fr 1fr;
+			gap: 25px;
+		}
+		@media (max-width: 768px) {
+			.header {
+				flex-direction: column;
+				padding: 60px 20px 40px;
+				gap: 30px;
+			}
+			.playlist-cover {
+				width: 200px;
+				height: 200px;
+			}
+			.header h1 {
+				font-size: 36px;
+			}
+			.chart-grid {
+				grid-template-columns: 1fr;
+				gap: 30px;
+			}
+			.viz-section {
+				padding: 60px 20px;
+			}
+			.summary-section {
+				padding: 40px 20px;
+			}
+			.lists-container {
+				grid-template-columns: 1fr;
+			}
+			.stat-cards {
+				grid-template-columns: repeat(2, 1fr);
+				gap: 15px;
+			}
 		}
 	</style>
 </head>
@@ -915,7 +1244,6 @@ let PlaylistExporter = {
 			<div class="header-content">
 				<div class="simple-badge">Simple Analysis</div>
 				<h1>${escapeHtml(playlist.name)}</h1>
-				<p>Basic Playlist Insights</p>
 			</div>
 		</div>
 		
@@ -945,62 +1273,76 @@ let PlaylistExporter = {
 			</div>
 		</div>
 		
-		<section id="top-songs" class="viz-section">
-			<h2 class="section-header">Top 10 by Song Count</h2>
-			<div class="lists-container" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 40px;">
-				<div class="track-list">
-					<div class="track-list-title">Top 10 Artists</div>
-					<div id="topArtistsList"></div>
+		<div class="visualizations" style="padding: 60px 40px;">
+			<section id="top-songs" class="viz-section">
+				<h2 class="section-header">Top 10 by Song Count</h2>
+				<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 25px;">
+					<div class="track-list">
+						<div class="track-list-title">Top 10 Artists</div>
+						<div id="topArtistsList"></div>
+					</div>
+					<div class="track-list">
+						<div class="track-list-title">Top 10 Genres</div>
+						<div id="topGenresList"></div>
+					</div>
+					<div class="track-list">
+						<div class="track-list-title">Top 10 Albums</div>
+						<div id="topAlbumsList"></div>
+					</div>
+					<div class="track-list">
+						<div class="track-list-title">Top 10 Labels</div>
+						<div id="topLabelsList"></div>
+					</div>
 				</div>
-				<div class="track-list">
-					<div class="track-list-title">Top 10 Genres</div>
-					<div id="topGenresList"></div>
+			</section>
+			
+			<section id="artist-genre" class="viz-section">
+				<h2 class="section-header">Artist & Genre Insights</h2>
+				<div class="chart-grid">
+					<div class="chart-container">
+						<div class="chart-title">Genre Distribution</div>
+						<div id="genreChart" class="chart-wrapper"></div>
+					</div>
+					<div class="chart-container">
+						<div class="chart-title">Top Artists</div>
+						<div id="artistChart" class="chart-wrapper"></div>
+					</div>
 				</div>
-			</div>
-		</section>
+			</section>
+			
+			<section id="playlist-characteristics" class="viz-section">
+				<h2 class="section-header">Playlist Characteristics</h2>
+				<div class="chart-grid">
+					<div class="chart-container">
+						<div class="chart-title">Popularity Distribution</div>
+						<div id="popularityChart" class="chart-wrapper"></div>
+					</div>
+					<div class="chart-container">
+						<div class="chart-title">Explicit Content</div>
+						<div id="explicitChart" class="chart-wrapper"></div>
+					</div>
+				</div>
+			</section>
+			
+			<section id="temporal-analysis" class="viz-section">
+				<h2 class="section-header">Temporal Analysis</h2>
+				<div class="chart-grid">
+					<div class="chart-container">
+						<div class="chart-title">Release Year Distribution</div>
+						<div id="yearChart" class="chart-wrapper"></div>
+					</div>
+					<div class="chart-container">
+						<div class="chart-title">Decade Breakdown</div>
+						<div id="decadeChart" class="chart-wrapper"></div>
+					</div>
+				</div>
+			</section>
 		
-		<section id="artist-genre" class="viz-section">
-			<h2 class="section-header">Artist & Genre Insights</h2>
-			<div class="chart-grid">
-				<div class="chart-container">
-					<div class="chart-title">Genre Distribution</div>
-					<div id="genreChart" class="chart-wrapper"></div>
-				</div>
-				<div class="chart-container">
-					<div class="chart-title">Top Artists</div>
-					<div id="artistChart" class="chart-wrapper"></div>
-				</div>
-			</div>
-		</section>
-		
-		<section id="playlist-characteristics" class="viz-section">
-			<h2 class="section-header">Playlist Characteristics</h2>
-			<div class="chart-grid">
-				<div class="chart-container">
-					<div class="chart-title">Popularity Distribution</div>
-					<div id="popularityChart" class="chart-wrapper"></div>
-				</div>
-				<div class="chart-container">
-					<div class="chart-title">Explicit Content</div>
-					<div id="explicitChart" class="chart-wrapper"></div>
-				</div>
-			</div>
-		</section>
-		
-		<section id="temporal-analysis" class="viz-section">
-			<h2 class="section-header">Temporal Analysis</h2>
-			<div class="chart-grid">
-				<div class="chart-container" style="grid-column: 1 / -1;">
-					<div class="chart-title">Release Timeline</div>
-					<div id="yearChart" class="chart-wrapper"></div>
-				</div>
-			</div>
-		</section>
-		
-		<section id="track-data" class="viz-section">
-			<h2 class="section-header">Complete Track Data</h2>
-			<div id="trackTable"></div>
-		</section>
+			<section id="track-data" class="viz-section">
+				<h2 class="section-header">Complete Track Data</h2>
+				<div id="trackTable"></div>
+			</section>
+		</div>
 	</div>
 	
 	<footer class="main-footer" style="background: var(--bg-elevated); border-top: 1px solid rgba(255, 255, 255, 0.05); padding: var(--space-xl) 0; margin-top: var(--space-4xl);">
@@ -1020,6 +1362,24 @@ let PlaylistExporter = {
 		const topGenres = ${JSON.stringify(topGenres)};
 		const topArtists = ${JSON.stringify(topArtists)};
 		const yearData = ${JSON.stringify(yearData)};
+		
+		// Scroll animations
+		const observerOptions = {
+			threshold: 0.1,
+			rootMargin: '0px 0px -100px 0px'
+		};
+		
+		const observer = new IntersectionObserver((entries) => {
+			entries.forEach(entry => {
+				if (entry.isIntersecting) {
+					entry.target.classList.add('visible');
+				}
+			});
+		}, observerOptions);
+		
+		document.querySelectorAll('.viz-section').forEach(section => {
+			observer.observe(section);
+		});
 		
 		// Top Artists List
 		const topArtistsList = document.getElementById('topArtistsList');
@@ -1113,26 +1473,52 @@ let PlaylistExporter = {
 			}
 		}).render();
 		
-		// Year Chart
+		// Year Distribution (Histogram)
 		new ApexCharts(document.querySelector("#yearChart"), {
 			series: [{ name: 'Tracks', data: yearData.map(([year, count]) => count) }],
-			chart: { type: 'area', height: 350, background: 'transparent', toolbar: { show: false } },
-			stroke: { curve: 'smooth', width: 3, colors: ['#1DB954'] },
-			fill: {
-				type: 'gradient',
-				gradient: {
-					shade: 'dark',
-					type: 'vertical',
-					shadeIntensity: 0.5,
-					gradientToColors: ['#00d4ff'],
-					opacityFrom: 0.7,
-					opacityTo: 0.1
-				}
-			},
+			chart: { type: 'bar', height: 350, background: 'transparent', toolbar: { show: false } },
+			colors: ['#1DB954'],
 			xaxis: { categories: yearData.map(([year]) => year), labels: { style: { colors: '#FFFFFF' } } },
 			yaxis: { labels: { style: { colors: '#FFFFFF' } } },
 			tooltip: { theme: 'dark' },
-			grid: { borderColor: 'rgba(255, 255, 255, 0.1)' }
+			grid: { borderColor: 'rgba(255, 255, 255, 0.1)' },
+			plotOptions: { bar: { distributed: false, columnWidth: '70%' } }
+		}).render();
+		
+		// Decade Breakdown
+		const decadeCount = {};
+		processedData.forEach(track => {
+			if (track.releaseDate) {
+				const year = parseInt(track.releaseDate.substring(0, 4));
+				const decade = Math.floor(year / 10) * 10;
+				const decadeLabel = decade + 's';
+				decadeCount[decadeLabel] = (decadeCount[decadeLabel] || 0) + 1;
+			}
+		});
+		
+		const sortedDecades = Object.entries(decadeCount).sort((a, b) => a[0].localeCompare(b[0]));
+		
+		new ApexCharts(document.querySelector("#decadeChart"), {
+			series: sortedDecades.map(([decade, count]) => count),
+			chart: { type: 'donut', height: 350, background: 'transparent' },
+			labels: sortedDecades.map(([decade]) => decade),
+			colors: ['#764ba2', '#667eea', '#00d4ff', '#1DB954', '#f093fb', '#4facfe'],
+			legend: { labels: { colors: '#FFFFFF' } },
+			tooltip: { theme: 'dark' },
+			plotOptions: {
+				pie: {
+					donut: {
+						labels: {
+							show: true,
+							total: {
+								show: true,
+								label: 'Total',
+								color: '#FFFFFF'
+							}
+						}
+					}
+				}
+			}
 		}).render();
 		
 		// Track Table
@@ -1834,9 +2220,9 @@ let PlaylistExporter = {
 <body>
 	<div style="max-width: 1400px; margin: 0 auto; padding: 0 var(--space-xl);">
 		<div class="header" style="padding: 60px 0; border-bottom: 1px solid rgba(255, 255, 255, 0.05); text-align: center;">
-			<h1>${this.escapeHtml(playlist.name)}</h1>
+				<h1>${this.escapeHtml(playlist.name)}</h1>
 			<p style="color: var(--text-secondary); font-size: var(--text-lg); margin-top: var(--space-sm);">Advanced Analysis - Full Audio Features</p>
-		</div>
+			</div>
 		<div class="summary-section" style="padding: 40px 0;">
 			<div class="stat-cards">
 				<div class="stat-card">
@@ -2329,7 +2715,7 @@ let PlaylistExporter = {
 				}
 			});
 		}, observerOptions);
-		
+
 		// Initialize all charts
 		function initializeCharts() {
 			try {
@@ -2946,7 +3332,7 @@ let PlaylistExporter = {
 					labels: { style: { colors: '#FFFFFF' } }
 				},
 				yaxis: { labels: { style: { colors: '#FFFFFF' } } },
-				stroke: { curve: 'smooth', width: 3 }
+					stroke: { curve: 'smooth', width: 3 }
 				});
 				additionChart.render();
 			}
@@ -3004,7 +3390,7 @@ let PlaylistExporter = {
 					max: 100,
 					labels: { style: { colors: '#FFFFFF' } }
 				},
-				stroke: { curve: 'smooth', width: 3 }
+					stroke: { curve: 'smooth', width: 3 }
 				});
 				popularityChart.render();
 			}
@@ -3528,7 +3914,7 @@ let PlaylistExporter = {
 				chartObserver.observe(container);
 			});
 		}
-		
+
 		// Event listeners
 		document.addEventListener('DOMContentLoaded', () => {
 			// Sort on header click

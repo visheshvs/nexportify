@@ -76,6 +76,13 @@ python3 -m http.server 8000
 
 Then open [http://localhost:8000](http://localhost:8000) or [http://[::1]:8000](http://[::1]:8000). The Javascript can be invoked by interacting with this locally-served webpage.
 
+#### Testing the Analysis Page Design
+
+To preview the analysis page design without Spotify authentication:
+1. Open `test-analysis.html` in your browser
+2. This shows the Simple Analysis design with sample data
+3. Perfect for testing UI changes and styling
+
 Data science analysis is available in three ways:
 1. **Built-in Analysis Page**: Click "Analyze" on any playlist for interactive visualizations
 2. **CSV Upload**: Upload any Spotify playlist CSV file (from exportify.net or your own exports) to analyze without authentication
