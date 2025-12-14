@@ -52,8 +52,41 @@ const utils = {
 			return data;
 		}
 		else if (response.status == 401) { 
+			console.error('401 Unauthorized - Token expired or invalid. Please re-authenticate.');
 			// Return to home page after auth token expiry, maintaining subdirectory path
 			location = location.origin + location.pathname.split('#')[0].split('?')[0]
+		}
+		else if (response.status == 403) {
+			const errorText = await response.text();
+			console.error('403 Forbidden - Access denied to:', url);
+			console.error('Error details:', errorText);
+			if (url.includes('audio-features')) {
+				console.error('Audio features endpoint returned 403. This usually means:');
+				console.error('1. The access token is invalid or expired');
+				console.error('2. The token was issued by a different Spotify app');
+				console.error('3. The token needs to be refreshed');
+				console.error('Current access token (first 20 chars):', accessToken?.substring(0, 20));
+				
+				// Clear the invalid token and force re-authentication
+				localStorage.removeItem('access_token');
+				localStorage.removeItem('access_token_timestamp');
+				
+				// Show user-friendly error
+				if (typeof error !== 'undefined' && error) {
+					error.innerHTML = '<p style="color: #ff6b6b; font-size: 18px; margin-bottom: 20px;">⚠️ Audio Features Access Denied</p>' +
+						'<p>The access token does not have permission to fetch audio features. This usually happens when:</p>' +
+						'<ul style="text-align: left; display: inline-block; margin: 20px 0;">' +
+						'<li>You created a new Spotify app but are using an old access token</li>' +
+						'<li>The access token has expired or is invalid</li>' +
+						'</ul>' +
+						'<p><strong>Solution:</strong> The invalid token has been cleared. Please click "Get Started" to re-authenticate.</p>' +
+						'<p style="margin-top: 20px;"><button onclick="location.reload()" style="padding: 10px 20px; background: #1DB954; color: white; border: none; border-radius: 5px; cursor: pointer;">Refresh Page & Re-authenticate</button></p>';
+				}
+				
+				// Return empty features array to allow export to continue without features
+				return { audio_features: [] };
+			}
+			throw new Error('403 Forbidden: ' + errorText);
 		}
 		else if (response.status == 429) {
 			//if (!error.innerHTML.includes("fa-bolt")) { error.innerHTML += '<p><i class="fa fa-bolt" style="font-size: 50px; margin-bottom: 20px">\
