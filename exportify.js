@@ -1,5 +1,28 @@
 // A collection of functions to create and send API queries
 const utils = {
+	// Determine which client ID to use based on the current domain
+	getClientId() {
+		const hostname = location.hostname;
+		const origin = location.origin;
+		
+		// Use original exportify.net client ID for these domains:
+		// - exportify.net
+		// - localhost
+		// - 127.0.0.1
+		// - [::1]
+		if (hostname === 'exportify.net' || 
+		    hostname === 'localhost' || 
+		    hostname === '127.0.0.1' || 
+		    hostname === '[::1]') {
+			console.log('Using original exportify.net client ID');
+			return 'd99b082b01d74d61a100c9a0e056380b';
+		}
+		
+		// Use custom client ID for GitHub Pages and other domains
+		console.log('Using custom client ID for domain:', hostname);
+		return 'd07d8c2ddb3646d4b4fb3781ffc6d2bc';
+	},
+	
 	// Send a request to the Spotify server to let it know we want a session. This is literally accomplished by navigating
 	// to a web address, which accomplishes a GET, with correct query params in tow. There the user may have to enter their
 	// Spotify credentials, after which they are redirected. Which client app wants access, which information exactly it wants
@@ -19,7 +42,8 @@ const utils = {
 		localStorage.setItem('code_verifier', code_verifier) // save the random string secret
 		// Get full redirect URI including path (for GitHub Pages subdirectory support)
 		let redirectUri = location.origin + location.pathname.replace(/\/$/, ''); // Remove trailing slash
-		location = "https://accounts.spotify.com/authorize?client_id=d07d8c2ddb3646d4b4fb3781ffc6d2bc" +
+		let clientId = this.getClientId(); // Get appropriate client ID based on domain
+		location = "https://accounts.spotify.com/authorize?client_id=" + clientId +
 			"&redirect_uri=" + encodeURIComponent(redirectUri) +
 			"&scope=playlist-read-private%20playlist-read-collaborative%20user-library-read" + // access to particular scopes of info defined here
 			"&response_type=code&code_challenge_method=S256&code_challenge=" + code_challenge
@@ -3187,8 +3211,9 @@ onload = async () => {
 
 		// Get full redirect URI including path (for GitHub Pages subdirectory support)
 		let redirectUri = location.origin + location.pathname.replace(/\/$/, ''); // Remove trailing slash
+		let clientId = utils.getClientId(); // Get appropriate client ID based on domain
 		let response = await fetch("https://accounts.spotify.com/api/token", { method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-			body: new URLSearchParams({client_id: "d07d8c2ddb3646d4b4fb3781ffc6d2bc", grant_type: 'authorization_code', code: code, redirect_uri: redirectUri,
+			body: new URLSearchParams({client_id: clientId, grant_type: 'authorization_code', code: code, redirect_uri: redirectUri,
 				code_verifier: localStorage.getItem('code_verifier')}) }) // POST to get the access token, then fish it out of the response body
 		localStorage.setItem('access_token', (await response.json()).access_token) // https://stackoverflow.com/questions/59555534/why-is-json-asynchronous
 		localStorage.setItem('access_token_timestamp', Date.now())
