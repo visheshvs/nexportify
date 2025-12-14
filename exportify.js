@@ -807,6 +807,7 @@ let PlaylistExporter = {
 		const genresIdx = getColumnIndex('Genres');
 		const explicitIdx = getColumnIndex('Explicit');
 		const addedAtIdx = getColumnIndex('Added At');
+		const labelIdx = getColumnIndex('Record Label');
 		
 		// Process data
 		const processedData = data.map(row => {
@@ -820,7 +821,8 @@ let PlaylistExporter = {
 				duration: parseInt(fields[durationIdx]) || 0,
 				genres: fields[genresIdx]?.replace(/^"|"$/g, '').split(',').filter(g => g.trim()),
 				explicit: fields[explicitIdx]?.toLowerCase() === 'true',
-				addedAt: fields[addedAtIdx]?.replace(/^"|"$/g, '')
+				addedAt: fields[addedAtIdx]?.replace(/^"|"$/g, ''),
+				label: fields[labelIdx]?.replace(/^"|"$/g, '')
 			};
 		}).filter(row => row.trackName);
 		
@@ -1259,16 +1261,24 @@ let PlaylistExporter = {
 					<div class="stat-card-label">Total Tracks</div>
 				</div>
 				<div class="stat-card">
+					<div class="stat-card-value">${uniqueArtists.size}</div>
+					<div class="stat-card-label">Artists</div>
+				</div>
+				<div class="stat-card">
+					<div class="stat-card-value">${uniqueAlbums.size}</div>
+					<div class="stat-card-label">Albums</div>
+				</div>
+				<div class="stat-card">
+					<div class="stat-card-value">${uniqueGenresSet.size}</div>
+					<div class="stat-card-label">Genres</div>
+				</div>
+				<div class="stat-card">
 					<div class="stat-card-value">${avgPopularity.toFixed(0)}</div>
 					<div class="stat-card-label">Avg Popularity</div>
 				</div>
 				<div class="stat-card">
 					<div class="stat-card-value">${Math.floor(totalDuration / 60000)} min</div>
 					<div class="stat-card-label">Total Duration</div>
-				</div>
-				<div class="stat-card">
-					<div class="stat-card-value">${explicitCount}</div>
-					<div class="stat-card-label">Explicit Tracks</div>
 				</div>
 			</div>
 		</div>
@@ -1318,6 +1328,10 @@ let PlaylistExporter = {
 						<div id="popularityChart" class="chart-wrapper"></div>
 					</div>
 					<div class="chart-container">
+						<div class="chart-title">Duration Distribution</div>
+						<div id="durationChart" class="chart-wrapper"></div>
+					</div>
+					<div class="chart-container">
 						<div class="chart-title">Explicit Content</div>
 						<div id="explicitChart" class="chart-wrapper"></div>
 					</div>
@@ -1361,6 +1375,8 @@ let PlaylistExporter = {
 		const processedData = ${JSON.stringify(processedData)};
 		const topGenres = ${JSON.stringify(topGenres)};
 		const topArtists = ${JSON.stringify(topArtists)};
+		const topAlbums = ${JSON.stringify(topAlbums)};
+		const topLabels = ${JSON.stringify(topLabels)};
 		const yearData = ${JSON.stringify(yearData)};
 		
 		// Scroll animations
@@ -1395,6 +1411,24 @@ let PlaylistExporter = {
 			topGenresList.innerHTML = topGenres.map(([genre, count], i) => 
 				'<div class="track-list-item"><span>' + (i + 1) + '. ' + genre + '</span><span>' + count + ' tracks</span></div>'
 			).join('');
+		}
+		
+		// Top Albums List
+		const topAlbumsList = document.getElementById('topAlbumsList');
+		if (topAlbumsList) {
+			topAlbumsList.innerHTML = topAlbums.map(([album, count], i) => 
+				'<div class="track-list-item"><span>' + (i + 1) + '. ' + album + '</span><span>' + count + ' tracks</span></div>'
+			).join('');
+		}
+		
+		// Top Labels List
+		const topLabelsList = document.getElementById('topLabelsList');
+		if (topLabelsList) {
+			topLabelsList.innerHTML = topLabels.length > 0 
+				? topLabels.map(([label, count], i) => 
+					'<div class="track-list-item"><span>' + (i + 1) + '. ' + label + '</span><span>' + count + ' tracks</span></div>'
+				).join('')
+				: '<div class="track-list-item"><span style="color: var(--text-tertiary);">No label data available</span></div>';
 		}
 		
 		// Genre Chart
@@ -1443,7 +1477,30 @@ let PlaylistExporter = {
 			xaxis: { categories: Object.keys(popularityBuckets), labels: { style: { colors: '#FFFFFF' } } },
 			yaxis: { labels: { style: { colors: '#FFFFFF' } } },
 			tooltip: { theme: 'dark' },
-			grid: { borderColor: 'rgba(255, 255, 255, 0.1)' }
+			grid: { borderColor: 'rgba(255, 255, 255, 0.1)' },
+			plotOptions: { bar: { distributed: false, columnWidth: '70%' } }
+		}).render();
+		
+		// Duration Distribution
+		const durationBuckets = { '0-2 min': 0, '2-3 min': 0, '3-4 min': 0, '4-5 min': 0, '5+ min': 0 };
+		processedData.forEach(track => {
+			const durationMin = track.duration / 60000;
+			if (durationMin <= 2) durationBuckets['0-2 min']++;
+			else if (durationMin <= 3) durationBuckets['2-3 min']++;
+			else if (durationMin <= 4) durationBuckets['3-4 min']++;
+			else if (durationMin <= 5) durationBuckets['4-5 min']++;
+			else durationBuckets['5+ min']++;
+		});
+		
+		new ApexCharts(document.querySelector("#durationChart"), {
+			series: [{ name: 'Tracks', data: Object.values(durationBuckets) }],
+			chart: { type: 'bar', height: 350, background: 'transparent', toolbar: { show: false } },
+			colors: ['#00D4FF'],
+			xaxis: { categories: Object.keys(durationBuckets), labels: { style: { colors: '#FFFFFF' } } },
+			yaxis: { labels: { style: { colors: '#FFFFFF' } } },
+			tooltip: { theme: 'dark' },
+			grid: { borderColor: 'rgba(255, 255, 255, 0.1)' },
+			plotOptions: { bar: { distributed: false, columnWidth: '70%' } }
 		}).render();
 		
 		// Explicit Content Chart
