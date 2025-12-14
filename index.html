@@ -1,16 +1,18 @@
 <!doctype html>
 <html lang="en">
 <head>
-	<title>Exportify</title>
+	<title>Nexporify - Music Intelligence Through Art</title>
 	<meta charset="utf-8">
-	<meta name="description" content="Export and save your Spotify playlists to csv. Analyze your music tastes in the Jupyter notebook. Data fields include genres, artists, popularity, year and more.">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<meta name="description" content="Export and save your Spotify playlists to csv. Analyze your music tastes with beautiful data visualizations. Data fields include genres, artists, popularity, year and more.">
 	
 	<link rel="icon" type="image/png" href="favicon.png">
 	<link rel="canonical" href="https://exportify.net">
-
-	<!-- Bootstrap -->
-	<link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.3.4/css/bootstrap.min.css">
-	<link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/font-awesome/4.3.0/css/font-awesome.min.css">
+	
+	<!-- Google Fonts - Inter Variable -->
+	<link rel="preconnect" href="https://fonts.googleapis.com">
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&display=swap" rel="stylesheet">
 
 	<!-- React.js -->
 	<script src="//unpkg.com/react@16/umd/react.production.min.js"></script>
@@ -20,30 +22,139 @@
 	<script src="FileSaver.js"></script>
 	<script src="//cdnjs.cloudflare.com/ajax/libs/jszip/2.5.0/jszip.min.js"></script>
 
-	<link rel="stylesheet" href="style.css">
+	<!-- Styles -->
+	<link rel="stylesheet" href="styles/artistic-theme.css">
+	
+	<!-- Scripts -->
 	<script src="exportify.js"></script>
 </head>
 
 <body>
-	<div class="container">
-		<div id="header">
-			<div id="logoutContainer" class="text-right"></div>
+	<!-- Abstract Background Shapes -->
+	<div class="abstract-shape shape-1"></div>
+	<div class="abstract-shape shape-2"></div>
+	<div class="abstract-shape shape-3"></div>
 
-			<h1><a href="https://github.com/pavelkomarov/exportify"><i class="fa fa-spotify" style="color: #65D36E"></i> Exportify</a></h1>
-			<p id="subtitle" class="lead">Export your Spotify playlist data.</p>
-			<p>Analyze the data <a href="http://pavelkomarov.com/exportify/taste_analysis">like this</a>
-				by <a href="https://mybinder.org/v2/gh/pavelkomarov/exportify/master" target="_blank">
-				launching the notebook</a>, uploading your <tt>.csv</tt>, and running the <tt>.ipynb</tt>.</p>
-			<p>What do you use your data to do? Have improvement ideas? Want to know how to use URIs? Join the <a href="https://github.com/pavelkomarov/exportify/discussions">discussion</a> on <a href="https://github.com/pavelkomarov/exportify">GitHub</a>!</p>
-			<p id="error"></p>
-
-			<button id="loginButton" type="submit" class="btn btn-lg" onclick="utils.authorize()">
-				<i class="fa fa-check-circle-o"></i> Get Started
-			</button>
+	<!-- Sticky Header (appears on scroll) -->
+	<header class="main-header" id="mainHeader">
+		<div class="header-content">
+			<a href="https://github.com/visheshvs/exportify" class="logo">Nexporify</a>
+			<div id="logoutContainer"></div>
 		</div>
+	</header>
 
+	<!-- Hero Section -->
+	<section class="hero-section" id="heroSection">
+		<div class="hero-background"></div>
+		<div class="hero-content">
+			<h1 class="hero-title">Explore Music<br/>Through Data</h1>
+			<p class="hero-subtitle" id="subtitle">Analyze, visualize, and export Spotify playlists</p>
+			<div id="exploreButtonContainer" style="display: none; margin-top: var(--space-lg);margin-bottom: var(--space-lg);">
+				<button id="exploreButton" class="btn btn-primary" onclick="document.getElementById('playlistsContainer').scrollIntoView({ behavior: 'smooth', block: 'start' })">
+					Explore
+				</button>
+			</div>
+			
+			<div class="hero-description">
+				<p class="hero-description-text">
+					Nexporify allows you to export Spotify playlist metadata and explore the data through 
+					data analysis and visualizations. Get insight into your listening patterns, genre distribution, 
+					and audio characteristics using Spotify’s Web API.
+				</p>
+				
+				<div class="hero-features">
+					<div class="hero-feature">
+						<h3>Export Playlist Data</h3>
+						<p>Download your playlists as CSV files with comprehensive metadata including track information, 
+						artist details, release dates, popularity metrics, and audio features.</p>
+					</div>
+					<div class="hero-feature">
+						<h3>Audio Features Analysis</h3>
+						<p>Explore  audio characteristics using Spotify's Web API data, including danceability, 
+						energy, valence, tempo, key, mode, and more. Learn more about 
+						<a href="https://developer.spotify.com/documentation/web-api/reference/get-audio-features" target="_blank" rel="noopener">audio features</a>.</p>
+					</div>
+					<div class="hero-feature">
+						<h3>Data Visualizations</h3>
+						<p>View playlist data through visual representations designed to highlight patterns and relationships. 
+						Charts and visual layouts focus on clarity while presenting music data in a structured, exploratory format.</p>
+					</div>
+				</div>
+				
+				<div id="heroActions" style="text-align: center; margin: var(--space-2xl) 0;">
+					<button id="loginButton" type="submit" class="btn btn-primary" onclick="utils.authorize()">
+						Get Started
+					</button>
+				</div>
+				
+				<div class="hero-how-to">
+					<h3>How to Use</h3>
+					<ol class="hero-steps">
+						<li>Click "Get Started" to connect your Spotify account</li>
+						<li>Browse your playlists in card or list view</li>
+						<li>Click "Export" to download playlist data as CSV</li>
+						<li>Click "Analyze" to view interactive visualizations and insights</li>
+						<li>Explore your music patterns through beautiful data art</li>
+					</ol>
+				</div>
+				
+				<div class="hero-credits">
+					<p class="hero-credit-text">
+						<span class="hero-credit-label">Open Source:</span>
+						<a href="https://github.com/visheshvs/exportify" target="_blank" rel="noopener">View on GitHub</a>
+					</p>
+					<p class="hero-credit-text">
+						<span class="hero-credit-label">Based on original work by:</span>
+						<a href="https://github.com/pavelkomarov/exportify" target="_blank" rel="noopener">pavelkomarov/exportify</a>
+					</p>
+				</div>
+			</div>
+		</div>
+	</section>
+
+	<!-- Main Content -->
+	<main>
+		<!-- Error Messages -->
+		<div id="error" class="error-message" style="display: none;"></div>
+
+		<!-- Playlists Container -->
 		<div id="playlistsContainer"></div>
 
-	</div><!-- /.container -->
+	</main>
+
+	<!-- Footer -->
+	<footer class="main-footer">
+		<div class="footer-content">
+			<p class="footer-text">
+				<span>Nexporify - Open Source Music Analytics</span>
+				<a href="https://github.com/visheshvs/exportify" target="_blank" rel="noopener">View on GitHub</a>
+			</p>
+			<p class="footer-credit">
+				Based on original work by <a href="https://github.com/pavelkomarov/exportify" target="_blank" rel="noopener">pavelkomarov/exportify</a>
+			</p>
+		</div>
+	</footer>
+
+	<script>
+		// Show/hide header on scroll
+		let lastScroll = 0;
+		const header = document.getElementById('mainHeader');
+		
+		window.addEventListener('scroll', () => {
+			const currentScroll = window.pageYOffset;
+			if (currentScroll > 100) {
+				header.classList.add('visible');
+			} else {
+				header.classList.remove('visible');
+			}
+			lastScroll = currentScroll;
+		});
+
+		// Update subtitle when playlists load
+		const originalOnload = window.onload;
+		window.onload = async function() {
+			if (originalOnload) await originalOnload();
+		};
+	</script>
 </body>
 </html>
