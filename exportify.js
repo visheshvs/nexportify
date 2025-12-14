@@ -909,11 +909,11 @@ let PlaylistExporter = {
 	</style>
 </head>
 <body>
-	<div class="page-container">
-		<div class="header" style="padding: 60px 0;">
+	<div style="max-width: 1400px; margin: 0 auto; padding: 0 var(--space-xl);">
+		<div class="header">
 			<img src="${coverArtUrl}" alt="Playlist Cover" class="playlist-cover" onerror="this.src='https://placehold.co/300x300?text=No+Image'" />
 			<div class="header-content">
-				<div class="simple-badge">⚡ Simple Analysis</div>
+				<div class="simple-badge">Simple Analysis</div>
 				<h1>${escapeHtml(playlist.name)}</h1>
 				<p>Basic Playlist Insights</p>
 			</div>
@@ -924,9 +924,8 @@ let PlaylistExporter = {
 			For complete analysis with all audio characteristics, export from <a href="https://exportify.net" target="_blank" style="color: var(--accent-blue);">exportify.net</a> and upload the CSV.
 		</div>
 		
-		<section class="summary-section">
-			<h2 class="section-header">Playlist Overview</h2>
-			<div class="stats-grid">
+		<div class="summary-section" style="padding: 40px 0;">
+			<div class="stat-cards">
 				<div class="stat-card">
 					<div class="stat-card-value">${totalTracks}</div>
 					<div class="stat-card-label">Total Tracks</div>
@@ -944,34 +943,63 @@ let PlaylistExporter = {
 					<div class="stat-card-label">Explicit Tracks</div>
 				</div>
 			</div>
-		</section>
+		</div>
 		
-		<section class="viz-section">
-			<h2 class="section-header">Genre Distribution</h2>
-			<div class="chart-container">
-				<div id="genreChart" class="chart-wrapper"></div>
+		<section id="top-songs" class="viz-section">
+			<h2 class="section-header">Top 10 by Song Count</h2>
+			<div class="lists-container" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 40px;">
+				<div class="track-list">
+					<div class="track-list-title">Top 10 Artists</div>
+					<div id="topArtistsList"></div>
+				</div>
+				<div class="track-list">
+					<div class="track-list-title">Top 10 Genres</div>
+					<div id="topGenresList"></div>
+				</div>
 			</div>
 		</section>
 		
-		<section class="viz-section">
-			<h2 class="section-header">Top Artists</h2>
-			<div class="chart-container">
-				<div id="artistChart" class="chart-wrapper"></div>
+		<section id="artist-genre" class="viz-section">
+			<h2 class="section-header">Artist & Genre Insights</h2>
+			<div class="chart-grid">
+				<div class="chart-container">
+					<div class="chart-title">Genre Distribution</div>
+					<div id="genreChart" class="chart-wrapper"></div>
+				</div>
+				<div class="chart-container">
+					<div class="chart-title">Top Artists</div>
+					<div id="artistChart" class="chart-wrapper"></div>
+				</div>
 			</div>
 		</section>
 		
-		<section class="viz-section">
-			<h2 class="section-header">Release Timeline</h2>
-			<div class="chart-container">
-				<div id="yearChart" class="chart-wrapper"></div>
+		<section id="playlist-characteristics" class="viz-section">
+			<h2 class="section-header">Playlist Characteristics</h2>
+			<div class="chart-grid">
+				<div class="chart-container">
+					<div class="chart-title">Popularity Distribution</div>
+					<div id="popularityChart" class="chart-wrapper"></div>
+				</div>
+				<div class="chart-container">
+					<div class="chart-title">Explicit Content</div>
+					<div id="explicitChart" class="chart-wrapper"></div>
+				</div>
 			</div>
 		</section>
 		
-		<section class="viz-section">
-			<h2 class="section-header">Popularity Distribution</h2>
-			<div class="chart-container">
-				<div id="popularityChart" class="chart-wrapper"></div>
+		<section id="temporal-analysis" class="viz-section">
+			<h2 class="section-header">Temporal Analysis</h2>
+			<div class="chart-grid">
+				<div class="chart-container" style="grid-column: 1 / -1;">
+					<div class="chart-title">Release Timeline</div>
+					<div id="yearChart" class="chart-wrapper"></div>
+				</div>
 			</div>
+		</section>
+		
+		<section id="track-data" class="viz-section">
+			<h2 class="section-header">Complete Track Data</h2>
+			<div id="trackTable"></div>
 		</section>
 	</div>
 	
@@ -992,6 +1020,22 @@ let PlaylistExporter = {
 		const topGenres = ${JSON.stringify(topGenres)};
 		const topArtists = ${JSON.stringify(topArtists)};
 		const yearData = ${JSON.stringify(yearData)};
+		
+		// Top Artists List
+		const topArtistsList = document.getElementById('topArtistsList');
+		if (topArtistsList) {
+			topArtistsList.innerHTML = topArtists.map(([artist, count], i) => 
+				'<div class="track-list-item"><span>' + (i + 1) + '. ' + artist + '</span><span>' + count + ' tracks</span></div>'
+			).join('');
+		}
+		
+		// Top Genres List
+		const topGenresList = document.getElementById('topGenresList');
+		if (topGenresList) {
+			topGenresList.innerHTML = topGenres.map(([genre, count], i) => 
+				'<div class="track-list-item"><span>' + (i + 1) + '. ' + genre + '</span><span>' + count + ' tracks</span></div>'
+			).join('');
+		}
 		
 		// Genre Chart
 		new ApexCharts(document.querySelector("#genreChart"), {
@@ -1021,17 +1065,6 @@ let PlaylistExporter = {
 			legend: { show: false }
 		}).render();
 		
-		// Year Chart
-		new ApexCharts(document.querySelector("#yearChart"), {
-			series: [{ name: 'Tracks', data: yearData.map(([year, count]) => count) }],
-			chart: { type: 'line', height: 350, background: 'transparent', toolbar: { show: false } },
-			stroke: { curve: 'smooth', width: 3, colors: ['#1DB954'] },
-			xaxis: { categories: yearData.map(([year]) => year), labels: { style: { colors: '#FFFFFF' } } },
-			yaxis: { labels: { style: { colors: '#FFFFFF' } } },
-			tooltip: { theme: 'dark' },
-			grid: { borderColor: 'rgba(255, 255, 255, 0.1)' }
-		}).render();
-		
 		// Popularity Distribution
 		const popularityBuckets = { '0-20': 0, '21-40': 0, '41-60': 0, '61-80': 0, '81-100': 0 };
 		processedData.forEach(track => {
@@ -1052,6 +1085,86 @@ let PlaylistExporter = {
 			tooltip: { theme: 'dark' },
 			grid: { borderColor: 'rgba(255, 255, 255, 0.1)' }
 		}).render();
+		
+		// Explicit Content Chart
+		const explicitCount = processedData.filter(t => t.explicit).length;
+		const cleanCount = processedData.length - explicitCount;
+		
+		new ApexCharts(document.querySelector("#explicitChart"), {
+			series: [explicitCount, cleanCount],
+			chart: { type: 'donut', height: 350, background: 'transparent' },
+			labels: ['Explicit', 'Clean'],
+			colors: ['#ff6b6b', '#1DB954'],
+			legend: { labels: { colors: '#FFFFFF' } },
+			tooltip: { theme: 'dark' },
+			plotOptions: {
+				pie: {
+					donut: {
+						labels: {
+							show: true,
+							total: {
+								show: true,
+								label: 'Total',
+								color: '#FFFFFF'
+							}
+						}
+					}
+				}
+			}
+		}).render();
+		
+		// Year Chart
+		new ApexCharts(document.querySelector("#yearChart"), {
+			series: [{ name: 'Tracks', data: yearData.map(([year, count]) => count) }],
+			chart: { type: 'area', height: 350, background: 'transparent', toolbar: { show: false } },
+			stroke: { curve: 'smooth', width: 3, colors: ['#1DB954'] },
+			fill: {
+				type: 'gradient',
+				gradient: {
+					shade: 'dark',
+					type: 'vertical',
+					shadeIntensity: 0.5,
+					gradientToColors: ['#00d4ff'],
+					opacityFrom: 0.7,
+					opacityTo: 0.1
+				}
+			},
+			xaxis: { categories: yearData.map(([year]) => year), labels: { style: { colors: '#FFFFFF' } } },
+			yaxis: { labels: { style: { colors: '#FFFFFF' } } },
+			tooltip: { theme: 'dark' },
+			grid: { borderColor: 'rgba(255, 255, 255, 0.1)' }
+		}).render();
+		
+		// Track Table
+		const trackTable = document.getElementById('trackTable');
+		if (trackTable) {
+			let tableHTML = '<div style="overflow-x: auto;"><table style="width: 100%; border-collapse: collapse;">';
+			tableHTML += '<thead><tr style="border-bottom: 2px solid var(--accent-primary);">';
+			tableHTML += '<th style="padding: 16px; text-align: left; color: var(--text-primary); font-weight: 700; text-transform: uppercase; font-size: 12px; letter-spacing: 0.1em;">#</th>';
+			tableHTML += '<th style="padding: 16px; text-align: left; color: var(--text-primary); font-weight: 700; text-transform: uppercase; font-size: 12px; letter-spacing: 0.1em;">Track</th>';
+			tableHTML += '<th style="padding: 16px; text-align: left; color: var(--text-primary); font-weight: 700; text-transform: uppercase; font-size: 12px; letter-spacing: 0.1em;">Artist</th>';
+			tableHTML += '<th style="padding: 16px; text-align: left; color: var(--text-primary); font-weight: 700; text-transform: uppercase; font-size: 12px; letter-spacing: 0.1em;">Album</th>';
+			tableHTML += '<th style="padding: 16px; text-align: left; color: var(--text-primary); font-weight: 700; text-transform: uppercase; font-size: 12px; letter-spacing: 0.1em;">Release</th>';
+			tableHTML += '<th style="padding: 16px; text-align: left; color: var(--text-primary); font-weight: 700; text-transform: uppercase; font-size: 12px; letter-spacing: 0.1em;">Duration</th>';
+			tableHTML += '<th style="padding: 16px; text-align: left; color: var(--text-primary); font-weight: 700; text-transform: uppercase; font-size: 12px; letter-spacing: 0.1em;">Popularity</th>';
+			tableHTML += '</tr></thead><tbody>';
+			
+			processedData.forEach((track, i) => {
+				const duration = Math.floor(track.duration / 60000) + ':' + String(Math.floor((track.duration % 60000) / 1000)).padStart(2, '0');
+				tableHTML += '<tr style="border-bottom: 1px solid rgba(255, 255, 255, 0.05); transition: background 0.2s ease;" onmouseover="this.style.background=\\'rgba(29, 185, 84, 0.1)\\'" onmouseout="this.style.background=\\'transparent\\'">';
+				tableHTML += '<td style="padding: 14px; color: var(--text-tertiary);">' + (i + 1) + '</td>';
+				tableHTML += '<td style="padding: 14px; color: var(--text-primary); font-weight: 600;">' + (track.trackName || '-') + '</td>';
+				tableHTML += '<td style="padding: 14px; color: var(--text-secondary);">' + (track.artist || '-') + '</td>';
+				tableHTML += '<td style="padding: 14px; color: var(--text-secondary);">' + (track.album || '-') + '</td>';
+				tableHTML += '<td style="padding: 14px; color: var(--text-secondary);">' + (track.releaseDate || '-') + '</td>';
+				tableHTML += '<td style="padding: 14px; color: var(--text-secondary);">' + duration + '</td>';
+				tableHTML += '<td style="padding: 14px; color: var(--text-secondary);">' + track.popularity + '</td>';
+				tableHTML += '</tr>';
+			});
+			
+			tableHTML += '</tbody></table></div>';
+			trackTable.innerHTML = tableHTML;
+		}
 	</script>
 </body>
 </html>`;
