@@ -383,11 +383,12 @@ a:hover {
 .hero-steps li {
   counter-increment: step-counter;
   position: relative;
-  padding-left: var(--space-3xl);
+  padding-left: 50px;
   margin-bottom: var(--space-sm);
   font-size: var(--text-sm);
   color: var(--text-secondary);
   line-height: 1.7;
+  text-align: left;
 }
 
 .hero-steps li::before {
