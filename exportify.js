@@ -1,5 +1,62 @@
 // A collection of functions to create and send API queries
 const utils = {
+	_refreshPromise: null,
+
+	getTokenAgeMs() {
+		const timestamp = Number(localStorage.getItem('access_token_timestamp'));
+		if (!timestamp || Number.isNaN(timestamp)) return Infinity;
+		return Date.now() - timestamp;
+	},
+
+	isAccessTokenFresh() {
+		// 5-minute safety buffer to avoid expiring mid-request.
+		return this.getTokenAgeMs() < (3600000 - 300000);
+	},
+
+	async refreshAccessToken() {
+		const refreshToken = localStorage.getItem('refresh_token');
+		if (!refreshToken) {
+			throw new Error('No refresh token available');
+		}
+		// Get full redirect URI including path (for GitHub Pages subdirectory support)
+		let redirectUri = location.origin + location.pathname.replace(/\/$/, '');
+		let response = await fetch("https://accounts.spotify.com/api/token", {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+			body: new URLSearchParams({
+				client_id: "d07d8c2ddb3646d4b4fb3781ffc6d2bc",
+				grant_type: 'refresh_token',
+				refresh_token: refreshToken,
+				redirect_uri: redirectUri
+			})
+		});
+		if (!response.ok) {
+			throw new Error('Refresh token request failed with status ' + response.status);
+		}
+		const tokenData = await response.json();
+		if (!tokenData.access_token) {
+			throw new Error('Refresh token response did not include access_token');
+		}
+		localStorage.setItem('access_token', tokenData.access_token);
+		localStorage.setItem('access_token_timestamp', Date.now());
+		// Spotify may rotate refresh tokens; persist if one is returned.
+		if (tokenData.refresh_token) {
+			localStorage.setItem('refresh_token', tokenData.refresh_token);
+		}
+		return tokenData.access_token;
+	},
+
+	async getValidAccessToken() {
+		const existing = localStorage.getItem('access_token');
+		if (existing && this.isAccessTokenFresh()) return existing;
+		if (!this._refreshPromise) {
+			this._refreshPromise = this.refreshAccessToken().finally(() => {
+				this._refreshPromise = null;
+			});
+		}
+		return this._refreshPromise;
+	},
+
 	// Send a request to the Spotify server to let it know we want a session. This is literally accomplished by navigating
 	// to a web address, which accomplishes a GET, with correct query params in tow. There the user may have to enter their
 	// Spotify credentials, after which they are redirected. Which client app wants access, which information exactly it wants
@@ -31,7 +88,12 @@ const utils = {
 	// https://eloquentjavascript.net/11_async.html
 	async apiCall(url, delay=0, bad_gateway_retries=2) {
 		await new Promise(r => setTimeout(r, delay)) // JavaScript equivalent of sleep(delay), to stay under rate limits ;)
-		const accessToken = localStorage.getItem('access_token');
+		let accessToken = null;
+		try {
+			accessToken = await this.getValidAccessToken();
+		} catch (refreshError) {
+			console.error('Unable to refresh access token:', refreshError);
+		}
 		if (!accessToken) {
 			console.error('No access token found. Please re-authenticate.');
 			location = location.origin + location.pathname.split('#')[0].split('?')[0];
@@ -52,7 +114,19 @@ const utils = {
 			return data;
 		}
 		else if (response.status == 401) { 
+			console.error('401 Unauthorized - attempting token refresh.');
+			try {
+				const freshToken = await this.getValidAccessToken();
+				if (freshToken && freshToken !== accessToken) {
+					response = await fetch(url, { headers: { 'Authorization': 'Bearer ' + freshToken } });
+					if (response.ok) return await response.json();
+				}
+			} catch (refreshError) {
+				console.error('Token refresh after 401 failed:', refreshError);
+			}
 			console.error('401 Unauthorized - Token expired or invalid. Please re-authenticate.');
+			localStorage.removeItem('access_token');
+			localStorage.removeItem('access_token_timestamp');
 			// Return to home page after auth token expiry, maintaining subdirectory path
 			location = location.origin + location.pathname.split('#')[0].split('?')[0]
 		}
@@ -4080,12 +4154,27 @@ onload = async () => {
 		let response = await fetch("https://accounts.spotify.com/api/token", { method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'},
 			body: new URLSearchParams({client_id: "d07d8c2ddb3646d4b4fb3781ffc6d2bc", grant_type: 'authorization_code', code: code, redirect_uri: redirectUri,
 				code_verifier: localStorage.getItem('code_verifier')}) }) // POST to get the access token, then fish it out of the response body
-		localStorage.setItem('access_token', (await response.json()).access_token) // https://stackoverflow.com/questions/59555534/why-is-json-asynchronous
-		localStorage.setItem('access_token_timestamp', Date.now())
+		const tokenData = await response.json()
+		if (tokenData.access_token) {
+			localStorage.setItem('access_token', tokenData.access_token)
+			localStorage.setItem('access_token_timestamp', Date.now())
+		}
+		if (tokenData.refresh_token) {
+			localStorage.setItem('refresh_token', tokenData.refresh_token)
+		}
 	}
-	if (localStorage.getItem('access_token') && Date.now() - localStorage.getItem('access_token_timestamp') < 3600000) {
+	if (localStorage.getItem('access_token') && utils.isAccessTokenFresh()) {
 		if (loginButton) loginButton.style.display = 'none' // When logged in, make the login button invisible
 		if (logoutContainer) logoutContainer.innerHTML = '<button id="logoutButton" class="logout-btn btn" onclick="utils.logout()">Log Out</button>' // Add a logout button by modifying the HTML
 		ReactDOM.render(React.createElement(PlaylistTable), playlistsContainer) // Create table and put it in the playlistsContainer	
+	} else if (localStorage.getItem('refresh_token')) {
+		try {
+			await utils.getValidAccessToken()
+			if (loginButton) loginButton.style.display = 'none'
+			if (logoutContainer) logoutContainer.innerHTML = '<button id="logoutButton" class="logout-btn btn" onclick="utils.logout()">Log Out</button>'
+			ReactDOM.render(React.createElement(PlaylistTable), playlistsContainer)
+		} catch (e) {
+			console.error('Failed to refresh access token on page load:', e)
+		}
 	}
 }

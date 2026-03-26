@@ -62,7 +62,7 @@ exportify/
 
 1. **Navigate to the exportify directory:**
    ```powershell
-   cd C:\Users\vishe\Documents\Github\exportify
+   cd path\to\exportify
    ```
 
 2. **Start a local web server:**
