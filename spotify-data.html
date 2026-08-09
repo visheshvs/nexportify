@@ -1,0 +1,299 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<title>Listening Data Exploration - Nexporify</title>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<meta name="description" content="Request your Spotify listening history and explore Extended Streaming History JSON locally. Charts, filters, and Excel export — all in your browser.">
+	
+	<link rel="icon" type="image/png" href="favicon.png">
+	
+	<link rel="preconnect" href="https://fonts.googleapis.com">
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&display=swap" rel="stylesheet">
+
+	<link rel="stylesheet" href="styles/artistic-theme.css">
+
+	<script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+	<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+	<script src="FileSaver.js"></script>
+</head>
+
+<body>
+	<div class="abstract-shape shape-1"></div>
+	<div class="abstract-shape shape-2"></div>
+	<div class="abstract-shape shape-3"></div>
+
+	<header class="main-header visible" id="mainHeader">
+		<div class="header-content">
+			<a href="index.html" class="logo">Nexporify</a>
+			<a href="index.html" class="btn btn-action">Back to Playlists</a>
+		</div>
+	</header>
+
+	<section class="hero-section data-page-hero">
+		<div class="hero-background"></div>
+		<div class="hero-content">
+			<p class="data-cta-eyebrow">Spotify Personal Data</p>
+			<h1 class="hero-title">Listening Data<br/>Exploration</h1>
+			<p class="hero-subtitle">Request Extended Streaming History, then explore it here</p>
+			<p class="hero-description-text">
+				Parse Spotify’s Extended Streaming History JSON in your browser — sample files from
+				<code>data/</code> or your own upload. Filter, chart, and export structured Excel.
+				Nothing is uploaded to a server.
+			</p>
+		</div>
+	</section>
+
+	<main class="data-page-main">
+		<section class="data-panel">
+			<h2 class="data-panel-title">How to Request Your Data</h2>
+			<p class="data-panel-lead">
+				Use Spotify’s official <strong>Download your data</strong> tool. For full listening analysis,
+				request <strong>Extended streaming history</strong> (lifetime play log with reason codes,
+				skip flags, platform, and more).
+			</p>
+
+			<ol class="data-steps">
+				<li>
+					<strong>Open Account Privacy</strong>
+					<p>
+						Sign in at
+						<a href="https://www.spotify.com/account/privacy/" target="_blank" rel="noopener">spotify.com/account/privacy</a>
+						in a web browser (not the mobile app).
+					</p>
+				</li>
+				<li>
+					<strong>Find “Download your data”</strong>
+					<p>
+						Request <strong>Extended streaming history</strong> for the richest play log.
+						Account data includes a shorter recent streaming history with fewer fields.
+					</p>
+				</li>
+				<li>
+					<strong>Request and confirm</strong>
+					<p>
+						Submit the request, then confirm via the email Spotify sends.
+						Without confirmation, the export may not start.
+					</p>
+				</li>
+				<li>
+					<strong>Wait for the download link</strong>
+					<p>
+						Extended history can take up to about 30 days. Download promptly when the email arrives —
+						links expire.
+					</p>
+				</li>
+				<li>
+					<strong>Unzip and load JSON here</strong>
+					<p>
+						Look for files named like <code>Streaming_History_Audio_*.json</code> and
+						<code>Streaming_History_Video_*.json</code>. Upload them below (or place samples in
+						<code>data/</code> and use Load sample).
+					</p>
+				</li>
+			</ol>
+
+			<p class="data-panel-note">
+				Official references:
+				<a href="https://support.spotify.com/us/article/data-rights-and-privacy-settings/" target="_blank" rel="noopener">Data rights and privacy</a>
+				·
+				<a href="https://support.spotify.com/in-en/article/understanding-your-data/" target="_blank" rel="noopener">Understanding your data</a>
+			</p>
+		</section>
+
+		<section class="data-panel">
+			<h2 class="data-panel-title">What’s in Extended Streaming History</h2>
+			<p class="data-panel-lead">
+				Each JSON file is an array of stream objects. Music, podcasts, and audiobooks share the same
+				shape; video streams use the same fields in Video files. IP addresses may be present in the
+				raw JSON — this app never charts them and omits them from Excel export.
+			</p>
+			<div class="data-placeholder-grid">
+				<div class="data-placeholder-card">
+					<h3>Identity of the play</h3>
+					<p>
+						<code>ts</code> (UTC end time), track or episode name, artist/show, album,
+						Spotify URI, <code>ms_played</code>, platform, country.
+					</p>
+				</div>
+				<div class="data-placeholder-card">
+					<h3>How it started / ended</h3>
+					<p>
+						<code>reason_start</code> / <code>reason_end</code> (e.g. trackdone, fwdbtn, endplay),
+						plus shuffle, skipped, offline, and incognito flags.
+					</p>
+				</div>
+				<div class="data-placeholder-card">
+					<h3>Content types</h3>
+					<p>
+						Music via track metadata; podcasts via episode fields; audiobooks via audiobook fields.
+						Audio vs video is inferred from the filename.
+					</p>
+				</div>
+			</div>
+		</section>
+
+		<section class="data-panel" id="uploadSection">
+			<h2 class="data-panel-title">Load Your Files</h2>
+			<p class="data-panel-lead">
+				Upload one or more Extended Streaming History <code>.json</code> files. Processing stays on
+				this device. Sample files in the gitignored <code>data/</code> folder can be loaded when you
+				serve the site locally (e.g. <code>python -m http.server 8000</code>).
+			</p>
+
+			<div class="data-load-actions">
+				<button type="button" class="btn btn-primary" id="loadSampleBtn">Load sample data</button>
+				<button type="button" class="btn" id="exportExcelBtn" disabled>Export Excel</button>
+			</div>
+
+			<div class="upload-section data-upload">
+				<input type="file" accept=".json,application/json" id="spotifyDataUpload" multiple style="display: none;" />
+				<label for="spotifyDataUpload" class="upload-zone" id="spotifyDataUploadZone">
+					<div class="upload-icon">
+						<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+							<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+							<polyline points="17 8 12 3 7 8"></polyline>
+							<line x1="12" y1="3" x2="12" y2="15"></line>
+						</svg>
+					</div>
+					<div class="upload-text">Upload JSON files</div>
+					<div class="upload-hint">Streaming_History_Audio / Video · multiple files OK</div>
+				</label>
+				<div id="spotifyDataUploadStatus" class="upload-status" style="display: none;"></div>
+			</div>
+		</section>
+
+		<section class="data-panel" id="explorerSection" hidden>
+			<div class="explorer-header">
+				<h2 class="data-panel-title">Explore</h2>
+				<p class="data-panel-lead" id="statFilteredCount">Load data to begin</p>
+			</div>
+
+			<div class="explorer-filters" id="filterBar">
+				<label class="filter-field">
+					<span>From</span>
+					<input type="date" id="filterDateFrom" />
+				</label>
+				<label class="filter-field">
+					<span>To</span>
+					<input type="date" id="filterDateTo" />
+				</label>
+				<label class="filter-field">
+					<span>Content</span>
+					<select id="filterContentType"></select>
+				</label>
+				<label class="filter-field">
+					<span>Platform</span>
+					<select id="filterPlatform"></select>
+				</label>
+				<label class="filter-field">
+					<span>Medium</span>
+					<select id="filterMedium"></select>
+				</label>
+				<label class="filter-field filter-checkbox">
+					<input type="checkbox" id="filterExcludeSkips" />
+					<span>Exclude skips / short plays</span>
+				</label>
+				<button type="button" class="btn btn-action" id="applyFiltersBtn">Apply</button>
+			</div>
+
+			<div class="stat-cards" id="statCards">
+				<div class="stat-card">
+					<div class="stat-value" id="statPlays">—</div>
+					<div class="stat-label">Plays</div>
+				</div>
+				<div class="stat-card">
+					<div class="stat-value" id="statHours">—</div>
+					<div class="stat-label">Hours listened</div>
+				</div>
+				<div class="stat-card">
+					<div class="stat-value" id="statArtists">—</div>
+					<div class="stat-label">Unique artists</div>
+				</div>
+				<div class="stat-card">
+					<div class="stat-value" id="statTracks">—</div>
+					<div class="stat-label">Unique tracks</div>
+				</div>
+				<div class="stat-card">
+					<div class="stat-value" id="statSkipRate">—</div>
+					<div class="stat-label">Skip rate</div>
+				</div>
+				<div class="stat-card stat-card-wide">
+					<div class="stat-value stat-value-sm" id="statDateSpan">—</div>
+					<div class="stat-label">Date span</div>
+				</div>
+			</div>
+
+			<div class="explorer-chart-grid">
+				<div class="explorer-chart-card explorer-chart-wide">
+					<div class="explorer-chart-title" id="chartListeningOverTimeTitle">Listening time</div>
+					<div id="chartListeningOverTime" class="explorer-chart"></div>
+				</div>
+				<div class="explorer-chart-card">
+					<div class="explorer-chart-title">Top artists (by minutes)</div>
+					<div id="chartTopArtists" class="explorer-chart"></div>
+				</div>
+				<div class="explorer-chart-card">
+					<div class="explorer-chart-title">Top tracks (by minutes)</div>
+					<div id="chartTopTracks" class="explorer-chart"></div>
+				</div>
+				<div class="explorer-chart-card">
+					<div class="explorer-chart-title">Content type</div>
+					<div id="chartContentType" class="explorer-chart"></div>
+				</div>
+				<div class="explorer-chart-card">
+					<div class="explorer-chart-title">Platforms</div>
+					<div id="chartPlatforms" class="explorer-chart"></div>
+				</div>
+				<div class="explorer-chart-card">
+					<div class="explorer-chart-title">Why streams ended</div>
+					<div id="chartReasonEnd" class="explorer-chart"></div>
+				</div>
+			</div>
+
+			<div class="play-log">
+				<div class="play-log-header">
+					<h3 class="play-log-title">Play log</h3>
+					<p class="play-log-info" id="playLogInfo"></p>
+				</div>
+				<div class="play-log-table-wrap">
+					<table class="play-log-table">
+						<thead>
+							<tr>
+								<th>Time</th>
+								<th>Title</th>
+								<th>Artist / show</th>
+								<th>Type</th>
+								<th>Played</th>
+								<th>Platform</th>
+								<th>Skipped</th>
+							</tr>
+						</thead>
+						<tbody id="playLogBody"></tbody>
+					</table>
+				</div>
+				<div class="play-log-pager">
+					<button type="button" class="btn btn-action" id="playLogPrev">Previous</button>
+					<button type="button" class="btn btn-action" id="playLogNext">Next</button>
+				</div>
+			</div>
+		</section>
+	</main>
+
+	<footer class="main-footer">
+		<div class="footer-content">
+			<p class="footer-text">
+				<span>Nexporify - Open Source Music Analytics</span>
+				<a href="https://github.com/visheshvs/exportify" target="_blank" rel="noopener">View on GitHub</a>
+			</p>
+			<p class="footer-credit">
+				Listening analysis runs locally · field reference from
+				<a href="https://support.spotify.com/in-en/article/understanding-your-data/" target="_blank" rel="noopener">Spotify Support</a>
+			</p>
+		</div>
+	</footer>
+
+	<script src="spotify-data.js"></script>
+</body>
+</html>
