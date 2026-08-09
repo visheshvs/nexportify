@@ -142,32 +142,42 @@
 				serve the site locally (e.g. <code>python -m http.server 8000</code>).
 			</p>
 
-			<div class="data-load-actions">
-				<button type="button" class="btn btn-primary" id="loadSampleBtn">Load sample data</button>
-				<button type="button" class="btn" id="exportExcelBtn" disabled>Export Excel</button>
-			</div>
-
-			<div class="upload-section data-upload">
-				<input type="file" accept=".json,application/json" id="spotifyDataUpload" multiple style="display: none;" />
-				<label for="spotifyDataUpload" class="upload-zone" id="spotifyDataUploadZone">
+			<div class="data-upload-row">
+				<div class="upload-section data-upload">
+					<input type="file" accept=".json,application/json" id="spotifyDataUpload" multiple style="display: none;" />
+					<label for="spotifyDataUpload" class="upload-zone" id="spotifyDataUploadZone">
+						<div class="upload-icon">
+							<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+								<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+								<polyline points="17 8 12 3 7 8"></polyline>
+								<line x1="12" y1="3" x2="12" y2="15"></line>
+							</svg>
+						</div>
+						<div class="upload-text">Upload JSON files</div>
+						<div class="upload-hint">Streaming_History_Audio / Video · multiple files OK</div>
+					</label>
+				</div>
+				<button type="button" class="upload-zone upload-zone-button" id="loadSampleBtn">
 					<div class="upload-icon">
 						<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-							<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-							<polyline points="17 8 12 3 7 8"></polyline>
-							<line x1="12" y1="3" x2="12" y2="15"></line>
+							<path d="M3 3v18h18"></path>
+							<path d="M7 14l4-4 4 4 5-6"></path>
 						</svg>
 					</div>
-					<div class="upload-text">Upload JSON files</div>
-					<div class="upload-hint">Streaming_History_Audio / Video · multiple files OK</div>
-				</label>
-				<div id="spotifyDataUploadStatus" class="upload-status" style="display: none;"></div>
+					<div class="upload-text">Load sample data</div>
+					<div class="upload-hint">from local data/ folder</div>
+				</button>
 			</div>
+			<div id="spotifyDataUploadStatus" class="upload-status" style="display: none;"></div>
 		</section>
 
 		<section class="data-panel" id="explorerSection" hidden>
 			<div class="explorer-header">
-				<h2 class="data-panel-title">Explore</h2>
-				<p class="data-panel-lead" id="statFilteredCount">Load data to begin</p>
+				<div class="explorer-header-text">
+					<h2 class="data-panel-title">Explore</h2>
+					<p class="data-panel-lead" id="statFilteredCount">Load data to begin</p>
+				</div>
+				<button type="button" class="btn btn-primary" id="exportExcelBtn" disabled>Export Excel</button>
 			</div>
 
 			<div class="explorer-filters" id="filterBar">
@@ -194,6 +204,13 @@
 				<label class="filter-field filter-checkbox">
 					<input type="checkbox" id="filterExcludeSkips" />
 					<span>Exclude skips / short plays</span>
+				</label>
+				<label class="filter-field">
+					<span>Time zone</span>
+					<select id="filterTimezone">
+						<option value="local" selected>Local</option>
+						<option value="utc">UTC</option>
+					</select>
 				</label>
 				<button type="button" class="btn btn-action" id="applyFiltersBtn">Apply</button>
 			</div>
@@ -225,30 +242,113 @@
 				</div>
 			</div>
 
+			<nav class="insight-tabs" id="insightTabs" role="tablist" aria-label="Insight chapters">
+				<button type="button" class="catalog-tab insight-tab active" data-insight-tab="overview">Overview</button>
+				<button type="button" class="catalog-tab insight-tab" data-insight-tab="fingerprint">Fingerprint</button>
+				<button type="button" class="catalog-tab insight-tab" data-insight-tab="taste">Taste</button>
+				<button type="button" class="catalog-tab insight-tab" data-insight-tab="artists">Artists</button>
+				<button type="button" class="catalog-tab insight-tab" data-insight-tab="attention">Attention</button>
+				<button type="button" class="catalog-tab insight-tab" data-insight-tab="obsessions">Obsessions</button>
+				<button type="button" class="catalog-tab insight-tab" data-insight-tab="context">Context</button>
+			</nav>
+
+			<div class="insight-panel active" id="panel-overview" data-insight-panel="overview">
 			<div class="explorer-chart-grid">
 				<div class="explorer-chart-card explorer-chart-wide">
-					<div class="explorer-chart-title" id="chartListeningOverTimeTitle">Listening time</div>
+					<div class="explorer-chart-header">
+						<div class="explorer-chart-title" id="chartListeningOverTimeTitle">Listening time</div>
+						<div class="chart-controls">
+							<label class="chart-control">
+								<span>Group by</span>
+								<select id="timeGranularity">
+									<option value="day">Day</option>
+									<option value="week" selected>Week</option>
+									<option value="month">Month</option>
+									<option value="year">Year</option>
+								</select>
+							</label>
+							<label class="chart-control">
+								<span>Unit</span>
+								<select id="timeUnit">
+									<option value="minutes" selected>Minutes</option>
+									<option value="hours">Hours</option>
+								</select>
+							</label>
+						</div>
+					</div>
 					<div id="chartListeningOverTime" class="explorer-chart"></div>
 				</div>
 				<div class="explorer-chart-card">
-					<div class="explorer-chart-title">Top artists (by minutes)</div>
+					<div class="explorer-chart-header">
+						<div class="explorer-chart-title">Top artists (by minutes)</div>
+						<label class="chart-control">
+							<span>Show</span>
+							<select id="topArtistsN">
+								<option value="10" selected>Top 10</option>
+								<option value="25">Top 25</option>
+								<option value="50">Top 50</option>
+							</select>
+						</label>
+					</div>
 					<div id="chartTopArtists" class="explorer-chart"></div>
 				</div>
 				<div class="explorer-chart-card">
-					<div class="explorer-chart-title">Top tracks (by minutes)</div>
+					<div class="explorer-chart-header">
+						<div class="explorer-chart-title">Top tracks (by minutes)</div>
+						<label class="chart-control">
+							<span>Show</span>
+							<select id="topTracksN">
+								<option value="10" selected>Top 10</option>
+								<option value="25">Top 25</option>
+								<option value="50">Top 50</option>
+							</select>
+						</label>
+					</div>
 					<div id="chartTopTracks" class="explorer-chart"></div>
 				</div>
 				<div class="explorer-chart-card">
-					<div class="explorer-chart-title">Content type</div>
+					<div class="explorer-chart-title">Content type (plays)</div>
 					<div id="chartContentType" class="explorer-chart"></div>
 				</div>
 				<div class="explorer-chart-card">
-					<div class="explorer-chart-title">Platforms</div>
+					<div class="explorer-chart-title">Platforms (plays)</div>
 					<div id="chartPlatforms" class="explorer-chart"></div>
 				</div>
 				<div class="explorer-chart-card">
-					<div class="explorer-chart-title">Why streams ended</div>
+					<div class="explorer-chart-title">Why streams ended (plays)</div>
 					<div id="chartReasonEnd" class="explorer-chart"></div>
+				</div>
+			</div>
+
+			<div class="catalog-section">
+				<div class="catalog-header">
+					<h3 class="play-log-title">Library summary</h3>
+					<p class="play-log-info" id="catalogInfo"></p>
+				</div>
+				<div class="catalog-toolbar">
+					<div class="catalog-tabs" role="tablist">
+						<button type="button" class="catalog-tab active" data-catalog="songs">Songs</button>
+						<button type="button" class="catalog-tab" data-catalog="artists">Artists</button>
+						<button type="button" class="catalog-tab" data-catalog="albums">Albums</button>
+					</div>
+					<input type="search" id="catalogSearch" class="catalog-search" placeholder="Search…" />
+				</div>
+				<div class="play-log-table-wrap">
+					<table class="play-log-table catalog-table">
+						<thead>
+							<tr>
+								<th class="sortable-th" data-sort="name">Name <span class="sort-indicator"></span></th>
+								<th class="sortable-th" data-sort="detail" id="catalogDetailHeader">Artist <span class="sort-indicator"></span></th>
+								<th class="sortable-th" data-sort="plays">Streams <span class="sort-indicator"></span></th>
+								<th class="sortable-th" data-sort="minutes">Minutes <span class="sort-indicator"></span></th>
+							</tr>
+						</thead>
+						<tbody id="catalogBody"></tbody>
+					</table>
+				</div>
+				<div class="play-log-pager">
+					<button type="button" class="btn btn-action" id="catalogPrev">Previous</button>
+					<button type="button" class="btn btn-action" id="catalogNext">Next</button>
 				</div>
 			</div>
 
@@ -278,6 +378,157 @@
 					<button type="button" class="btn btn-action" id="playLogNext">Next</button>
 				</div>
 			</div>
+			</div><!-- /panel-overview -->
+
+			<div class="insight-panel" id="panel-fingerprint" data-insight-panel="fingerprint" hidden>
+				<p class="insight-takeaway" id="takeaway-fingerprint"></p>
+				<p class="insight-tz-note" id="fingerprintTzLabel"></p>
+				<div class="stat-cards insight-stat-cards">
+					<div class="stat-card"><div class="stat-value" id="insightActiveDays">—</div><div class="stat-label">Active days</div></div>
+					<div class="stat-card"><div class="stat-value" id="insightLongestStreak">—</div><div class="stat-label">Longest streak</div></div>
+					<div class="stat-card"><div class="stat-value" id="insightSessionCount">—</div><div class="stat-label">Sessions</div></div>
+					<div class="stat-card"><div class="stat-value" id="insightMedianSession">—</div><div class="stat-label">Median session</div></div>
+				</div>
+				<div class="explorer-chart-grid">
+					<div class="explorer-chart-card explorer-chart-wide">
+						<div class="explorer-chart-title">Listening clock (weekday × hour)</div>
+						<div id="insightClockHeatmap" class="explorer-chart heat-wrap"></div>
+					</div>
+					<div class="explorer-chart-card explorer-chart-wide">
+						<div class="explorer-chart-title">Daily calendar</div>
+						<div id="insightCalendarHeatmap" class="explorer-chart heat-wrap"></div>
+					</div>
+					<div class="explorer-chart-card">
+						<div class="explorer-chart-title">Session archetypes</div>
+						<div id="insightSessionArchetypes" class="explorer-chart"></div>
+					</div>
+					<div class="explorer-chart-card">
+						<div class="explorer-chart-title">Music vs podcast by hour</div>
+						<div id="insightMusicPodcastHour" class="explorer-chart"></div>
+					</div>
+				</div>
+			</div>
+
+			<div class="insight-panel" id="panel-taste" data-insight-panel="taste" hidden>
+				<p class="insight-takeaway" id="takeaway-taste"></p>
+				<div class="stat-cards insight-stat-cards">
+					<div class="stat-card"><div class="stat-value" id="insightGini">—</div><div class="stat-label">Gini (concentration)</div></div>
+					<div class="stat-card"><div class="stat-value" id="insightExploreScore">—</div><div class="stat-label">Exploration score</div></div>
+					<div class="stat-card stat-card-wide"><div class="stat-value stat-value-sm" id="insightHalfArtists">—</div><div class="stat-label">Artists for 50% of listening</div></div>
+				</div>
+				<div class="explorer-chart-grid">
+					<div class="explorer-chart-card explorer-chart-wide">
+						<div class="explorer-chart-title">Lorenz curve — taste concentration</div>
+						<div id="insightLorenz" class="explorer-chart"></div>
+					</div>
+					<div class="explorer-chart-card">
+						<div class="explorer-chart-title">New artists &amp; tracks discovered</div>
+						<div id="insightDiscovery" class="explorer-chart"></div>
+					</div>
+					<div class="explorer-chart-card">
+						<div class="explorer-chart-title">Novelty ratio (% minutes on recently discovered tracks)</div>
+						<div id="insightNovelty" class="explorer-chart"></div>
+					</div>
+				</div>
+			</div>
+
+			<div class="insight-panel" id="panel-artists" data-insight-panel="artists" hidden>
+				<p class="insight-takeaway" id="takeaway-artists"></p>
+				<div class="explorer-chart-grid">
+					<div class="explorer-chart-card explorer-chart-wide">
+						<div class="explorer-chart-title">Loyalty vs fling (span × plays, sized by minutes)</div>
+						<div id="insightArtistBubble" class="explorer-chart"></div>
+					</div>
+					<div class="explorer-chart-card explorer-chart-wide">
+						<div class="explorer-chart-title">Top 20 artist timelines</div>
+						<div id="insightArtistTimeline" class="explorer-chart"></div>
+					</div>
+					<div class="explorer-chart-card">
+						<div class="explorer-chart-title">Catalog depth (unique tracks)</div>
+						<div id="insightCatalogDepth" class="explorer-chart"></div>
+					</div>
+					<div class="explorer-chart-card">
+						<div class="explorer-chart-title">One-track obsessions</div>
+						<div id="insightOneTrack" class="explorer-chart insight-list-wrap"></div>
+					</div>
+				</div>
+			</div>
+
+			<div class="insight-panel" id="panel-attention" data-insight-panel="attention" hidden>
+				<p class="insight-takeaway" id="takeaway-attention"></p>
+				<div class="stat-cards insight-stat-cards">
+					<div class="stat-card"><div class="stat-value" id="insightMeanCompletion">—</div><div class="stat-label">Mean completion</div></div>
+					<div class="stat-card"><div class="stat-value" id="insightRestlessness">—</div><div class="stat-label">Restlessness (fwdbtn)</div></div>
+					<div class="stat-card"><div class="stat-value" id="insightMeasurablePlays">—</div><div class="stat-label">Measurable plays</div></div>
+				</div>
+				<div class="explorer-chart-grid">
+					<div class="explorer-chart-card">
+						<div class="explorer-chart-title">Completion rate distribution</div>
+						<div id="insightCompletion" class="explorer-chart"></div>
+					</div>
+					<div class="explorer-chart-card">
+						<div class="explorer-chart-title">Skip rate by platform</div>
+						<div id="insightSkipPlatform" class="explorer-chart"></div>
+					</div>
+					<div class="explorer-chart-card">
+						<div class="explorer-chart-title">Skip rate by hour</div>
+						<div id="insightSkipHour" class="explorer-chart"></div>
+					</div>
+					<div class="explorer-chart-card">
+						<div class="explorer-chart-title">Most-skipped artists (≥20 plays)</div>
+						<div id="insightMostSkipped" class="explorer-chart"></div>
+					</div>
+					<div class="explorer-chart-card">
+						<div class="explorer-chart-title">How plays started (reason_start)</div>
+						<div id="insightIntentional" class="explorer-chart"></div>
+					</div>
+				</div>
+			</div>
+
+			<div class="insight-panel" id="panel-obsessions" data-insight-panel="obsessions" hidden>
+				<p class="insight-takeaway" id="takeaway-obsessions"></p>
+				<div class="stat-cards insight-stat-cards">
+					<div class="stat-card stat-card-wide"><div class="stat-value stat-value-sm" id="insightMaxRun">—</div><div class="stat-label">Longest consecutive run</div></div>
+					<div class="stat-card"><div class="stat-value stat-value-sm" id="insightMaxRunArtist">—</div><div class="stat-label">Artist</div></div>
+				</div>
+				<div class="explorer-chart-grid">
+					<div class="explorer-chart-card">
+						<div class="explorer-chart-title">Peak plays in a single day</div>
+						<div id="insightPeakDay" class="explorer-chart insight-list-wrap"></div>
+					</div>
+					<div class="explorer-chart-card">
+						<div class="explorer-chart-title">Comebacks (dormant 120+ days)</div>
+						<div id="insightComebacks" class="explorer-chart insight-list-wrap"></div>
+					</div>
+					<div class="explorer-chart-card explorer-chart-wide">
+						<div class="explorer-chart-title">Song of the month</div>
+						<div id="insightSongOfMonth" class="explorer-chart"></div>
+					</div>
+				</div>
+			</div>
+
+			<div class="insight-panel" id="panel-context" data-insight-panel="context" hidden>
+				<p class="insight-takeaway" id="takeaway-context"></p>
+				<div class="stat-cards insight-stat-cards">
+					<div class="stat-card"><div class="stat-value" id="insightOffline">—</div><div class="stat-label">Offline plays</div></div>
+					<div class="stat-card"><div class="stat-value" id="insightIncognito">—</div><div class="stat-label">Incognito plays</div></div>
+					<div class="stat-card"><div class="stat-value" id="insightOfflinePct">—</div><div class="stat-label">Offline share</div></div>
+				</div>
+				<div class="explorer-chart-grid">
+					<div class="explorer-chart-card explorer-chart-wide">
+						<div class="explorer-chart-title">Country over time</div>
+						<div id="insightCountry" class="explorer-chart"></div>
+					</div>
+					<div class="explorer-chart-card explorer-chart-wide">
+						<div class="explorer-chart-title">Platform migration</div>
+						<div id="insightPlatformMigration" class="explorer-chart"></div>
+					</div>
+					<div class="explorer-chart-card">
+						<div class="explorer-chart-title">Offline plays by month</div>
+						<div id="insightOfflineTrend" class="explorer-chart"></div>
+					</div>
+				</div>
+			</div>
 		</section>
 	</main>
 
@@ -294,6 +545,7 @@
 		</div>
 	</footer>
 
+	<script src="spotify-insights.js"></script>
 	<script src="spotify-data.js"></script>
 </body>
 </html>

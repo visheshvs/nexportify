@@ -13,8 +13,9 @@
 	];
 
 	const PAGE_SIZE = 50;
-	const TOP_N = 15;
+	const CATALOG_PAGE_SIZE = 50;
 	const SHORT_PLAY_MS = 30000;
+	const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 	const CHART_COLORS = {
 		primary: '#1DB954',
@@ -22,7 +23,6 @@
 		magenta: '#FF00E5',
 		amber: '#FFB800',
 		purple: '#8B5CF6',
-		text: '#FFFFFF',
 		muted: 'rgba(255, 255, 255, 0.5)',
 		grid: 'rgba(255, 255, 255, 0.08)'
 	};
@@ -30,13 +30,30 @@
 	const state = {
 		allRecords: [],
 		filtered: [],
+		lastStats: null,
+		insights: null,
+		activeInsightTab: 'overview',
 		filters: {
 			dateFrom: '',
 			dateTo: '',
 			contentType: 'all',
 			platform: 'all',
 			medium: 'all',
-			excludeSkips: false
+			excludeSkips: false,
+			timezone: 'local'
+		},
+		chartPrefs: {
+			timeGranularity: 'week',
+			timeUnit: 'minutes',
+			topArtistsN: 10,
+			topTracksN: 10
+		},
+		catalog: {
+			type: 'songs',
+			search: '',
+			sortKey: 'minutes',
+			sortDir: 'desc',
+			page: 0
 		},
 		page: 0,
 		charts: {}
@@ -65,6 +82,10 @@
 		const m = Math.floor(totalSec / 60);
 		const s = totalSec % 60;
 		return m + ':' + pad2(s);
+	}
+
+	function formatMinutes(mins) {
+		return (Math.round((mins || 0) * 10) / 10).toLocaleString();
 	}
 
 	function formatTimestamp(iso) {
@@ -115,6 +136,17 @@
 		if (el) el.hidden = !visible;
 		const exportBtn = document.getElementById('exportExcelBtn');
 		if (exportBtn) exportBtn.disabled = !visible;
+	}
+
+	function readChartPrefs() {
+		const g = document.getElementById('timeGranularity');
+		const u = document.getElementById('timeUnit');
+		const a = document.getElementById('topArtistsN');
+		const t = document.getElementById('topTracksN');
+		if (g && g.value) state.chartPrefs.timeGranularity = g.value;
+		if (u && u.value) state.chartPrefs.timeUnit = u.value;
+		if (a && a.value) state.chartPrefs.topArtistsN = parseInt(a.value, 10) || 10;
+		if (t && t.value) state.chartPrefs.topTracksN = parseInt(t.value, 10) || 10;
 	}
 
 	// ---------- parse / normalize ----------
@@ -286,10 +318,23 @@
 		map[key].minutes += minutes;
 	}
 
+	function bumpCountMinutes(map, key, plays, minutes) {
+		if (!key) key = '(unknown)';
+		if (!map[key]) map[key] = { plays: 0, minutes: 0 };
+		map[key].plays += plays;
+		map[key].minutes += minutes;
+	}
+
 	function topFromMap(map, n) {
 		return Object.values(map)
 			.sort(function (a, b) { return b.minutes - a.minutes || b.plays - a.plays; })
 			.slice(0, n);
+	}
+
+	function allFromMap(map) {
+		return Object.values(map).sort(function (a, b) {
+			return b.minutes - a.minutes || b.plays - a.plays;
+		});
 	}
 
 	function computeStats(records) {
@@ -326,25 +371,51 @@
 				daily[day].ms += r.ms_played;
 			}
 
-			platforms[r.platform] = (platforms[r.platform] || 0) + 1;
-			if (r.conn_country) countries[r.conn_country] = (countries[r.conn_country] || 0) + 1;
-			contentTypes[r.content_type] = (contentTypes[r.content_type] || 0) + 1;
-			media[r.stream_medium] = (media[r.stream_medium] || 0) + 1;
-			if (r.reason_start) reasonStart[r.reason_start] = (reasonStart[r.reason_start] || 0) + 1;
-			if (r.reason_end) reasonEnd[r.reason_end] = (reasonEnd[r.reason_end] || 0) + 1;
+			bumpCountMinutes(platforms, r.platform, 1, r.played_minutes);
+			if (r.conn_country) bumpCountMinutes(countries, r.conn_country, 1, r.played_minutes);
+			bumpCountMinutes(contentTypes, r.content_type, 1, r.played_minutes);
+			bumpCountMinutes(media, r.stream_medium, 1, r.played_minutes);
+			if (r.reason_start) bumpCountMinutes(reasonStart, r.reason_start, 1, r.played_minutes);
+			if (r.reason_end) bumpCountMinutes(reasonEnd, r.reason_end, 1, r.played_minutes);
 
 			if (r.content_type === 'music') {
 				uniqueArtists.add(r.creator);
 				uniqueTracks.add(r.uri || (r.title + '|' + r.creator));
 				bumpMap(artists, r.creator, 1, r.played_minutes);
-				bumpMap(tracks, r.title + ' — ' + r.creator, 1, r.played_minutes);
-				if (r.album) bumpMap(albums, r.album + ' — ' + r.creator, 1, r.played_minutes);
+				bumpMap(tracks, r.title + '|||' + r.creator, 1, r.played_minutes);
+				if (tracks[r.title + '|||' + r.creator]) {
+					tracks[r.title + '|||' + r.creator].title = r.title;
+					tracks[r.title + '|||' + r.creator].artist = r.creator;
+				}
+				if (r.album) {
+					const albumKey = r.album + '|||' + r.creator;
+					bumpMap(albums, albumKey, 1, r.played_minutes);
+					albums[albumKey].title = r.album;
+					albums[albumKey].artist = r.creator;
+				}
 			} else if (r.content_type === 'podcast') {
 				bumpMap(shows, r.creator, 1, r.played_minutes);
 			}
 		}
 
 		const dailySeries = Object.keys(daily).sort().map(function (k) { return daily[k]; });
+		const artistList = allFromMap(artists);
+		const trackList = allFromMap(tracks).map(function (t) {
+			return {
+				name: t.title || t.name.split('|||')[0],
+				detail: t.artist || t.name.split('|||')[1] || '',
+				plays: t.plays,
+				minutes: t.minutes
+			};
+		});
+		const albumList = allFromMap(albums).map(function (a) {
+			return {
+				name: a.title || a.name.split('|||')[0],
+				detail: a.artist || a.name.split('|||')[1] || '',
+				plays: a.plays,
+				minutes: a.minutes
+			};
+		});
 
 		return {
 			totalPlays: records.length,
@@ -356,19 +427,13 @@
 			uniqueTracks: uniqueTracks.size,
 			minDate: minDate,
 			maxDate: maxDate,
-			topArtists: topFromMap(artists, TOP_N),
-			topTracks: topFromMap(tracks, TOP_N).map(function (t) {
-				const parts = t.name.split(' — ');
-				return {
-					name: parts[0] || t.name,
-					artist: parts.slice(1).join(' — ') || '',
-					plays: t.plays,
-					minutes: t.minutes,
-					label: t.name
-				};
-			}),
-			topShows: topFromMap(shows, TOP_N),
-			topAlbums: topFromMap(albums, TOP_N),
+			artists: artistList,
+			tracks: trackList,
+			albums: albumList,
+			topArtists: artistList,
+			topTracks: trackList,
+			topShows: allFromMap(shows),
+			topAlbums: albumList,
 			platforms: platforms,
 			countries: countries,
 			contentTypes: contentTypes,
@@ -404,7 +469,44 @@
 		};
 	}
 
-	// ---------- UI: filters / stats / table ----------
+	// ---------- time bucketing ----------
+
+	function mondayOf(dateStr) {
+		const dt = new Date(dateStr + 'T00:00:00Z');
+		const day = dt.getUTCDay();
+		const mondayOffset = (day + 6) % 7;
+		dt.setUTCDate(dt.getUTCDate() - mondayOffset);
+		return dt;
+	}
+
+	function bucketDaily(daily, granularity) {
+		const buckets = {};
+		daily.forEach(function (d) {
+			const dt = new Date(d.date + 'T00:00:00Z');
+			let key;
+			let label;
+			if (granularity === 'year') {
+				key = String(dt.getUTCFullYear());
+				label = key;
+			} else if (granularity === 'month') {
+				key = dt.getUTCFullYear() + '-' + pad2(dt.getUTCMonth() + 1);
+				label = MONTH_NAMES[dt.getUTCMonth()] + ' ' + dt.getUTCFullYear();
+			} else if (granularity === 'week') {
+				const mon = mondayOf(d.date);
+				key = toDateInputValue(mon);
+				label = 'W ' + MONTH_NAMES[mon.getUTCMonth()] + ' ' + mon.getUTCDate() + ', ' + mon.getUTCFullYear();
+			} else {
+				key = d.date;
+				label = MONTH_NAMES[dt.getUTCMonth()] + ' ' + dt.getUTCDate() + ', ' + dt.getUTCFullYear();
+			}
+			if (!buckets[key]) buckets[key] = { key: key, label: label, minutes: 0, plays: 0 };
+			buckets[key].minutes += d.minutes;
+			buckets[key].plays += d.plays;
+		});
+		return Object.keys(buckets).sort().map(function (k) { return buckets[k]; });
+	}
+
+	// ---------- UI: filters / stats / tables ----------
 
 	function populateFilterControls(options) {
 		const platformSelect = document.getElementById('filterPlatform');
@@ -458,6 +560,7 @@
 		state.filters.platform = (document.getElementById('filterPlatform') || {}).value || 'all';
 		state.filters.medium = (document.getElementById('filterMedium') || {}).value || 'all';
 		state.filters.excludeSkips = !!(document.getElementById('filterExcludeSkips') || {}).checked;
+		state.filters.timezone = (document.getElementById('filterTimezone') || {}).value || 'local';
 	}
 
 	function renderStats(stats) {
@@ -475,6 +578,100 @@
 			: '—';
 		set('statDateSpan', span);
 		set('statFilteredCount', stats.totalPlays.toLocaleString() + ' plays in view');
+	}
+
+	function getCatalogRows(stats) {
+		if (!stats) return [];
+		if (state.catalog.type === 'artists') {
+			return stats.artists.map(function (a) {
+				return { name: a.name, detail: '', plays: a.plays, minutes: a.minutes };
+			});
+		}
+		if (state.catalog.type === 'albums') {
+			return stats.albums.slice();
+		}
+		return stats.tracks.slice();
+	}
+
+	function renderCatalog() {
+		const tbody = document.getElementById('catalogBody');
+		const info = document.getElementById('catalogInfo');
+		const prevBtn = document.getElementById('catalogPrev');
+		const nextBtn = document.getElementById('catalogNext');
+		const detailHeader = document.getElementById('catalogDetailHeader');
+		if (!tbody || !state.lastStats) return;
+
+		if (detailHeader) {
+			if (state.catalog.type === 'artists') {
+				detailHeader.style.display = 'none';
+			} else {
+				detailHeader.style.display = '';
+				detailHeader.innerHTML = (state.catalog.type === 'albums' ? 'Artist' : 'Artist') +
+					' <span class="sort-indicator"></span>';
+			}
+		}
+
+		document.querySelectorAll('.catalog-toolbar .catalog-tab').forEach(function (btn) {
+			btn.classList.toggle('active', btn.getAttribute('data-catalog') === state.catalog.type);
+		});
+
+		document.querySelectorAll('.sortable-th').forEach(function (th) {
+			const key = th.getAttribute('data-sort');
+			const ind = th.querySelector('.sort-indicator');
+			if (!ind) return;
+			if (key === state.catalog.sortKey) {
+				ind.textContent = state.catalog.sortDir === 'asc' ? '▲' : '▼';
+			} else {
+				ind.textContent = '';
+			}
+		});
+
+		let rows = getCatalogRows(state.lastStats);
+		const q = (state.catalog.search || '').trim().toLowerCase();
+		if (q) {
+			rows = rows.filter(function (r) {
+				return (r.name || '').toLowerCase().indexOf(q) !== -1 ||
+					(r.detail || '').toLowerCase().indexOf(q) !== -1;
+			});
+		}
+
+		const key = state.catalog.sortKey;
+		const dir = state.catalog.sortDir === 'asc' ? 1 : -1;
+		rows.sort(function (a, b) {
+			let av = a[key];
+			let bv = b[key];
+			if (typeof av === 'string') av = av.toLowerCase();
+			if (typeof bv === 'string') bv = bv.toLowerCase();
+			if (av < bv) return -1 * dir;
+			if (av > bv) return 1 * dir;
+			return 0;
+		});
+
+		const total = rows.length;
+		const totalPages = Math.max(1, Math.ceil(total / CATALOG_PAGE_SIZE));
+		if (state.catalog.page >= totalPages) state.catalog.page = totalPages - 1;
+		if (state.catalog.page < 0) state.catalog.page = 0;
+		const start = state.catalog.page * CATALOG_PAGE_SIZE;
+		const pageRows = rows.slice(start, start + CATALOG_PAGE_SIZE);
+		const showDetail = state.catalog.type !== 'artists';
+
+		tbody.innerHTML = pageRows.map(function (r) {
+			return '<tr>' +
+				'<td>' + escapeHtml(r.name) + '</td>' +
+				(showDetail ? '<td>' + escapeHtml(r.detail || '') + '</td>' : '<td></td>') +
+				'<td>' + r.plays.toLocaleString() + '</td>' +
+				'<td>' + formatMinutes(r.minutes) + '</td>' +
+				'</tr>';
+		}).join('');
+
+		if (info) {
+			const showingFrom = total ? start + 1 : 0;
+			const showingTo = Math.min(start + CATALOG_PAGE_SIZE, total);
+			info.textContent = 'Showing ' + showingFrom + '–' + showingTo + ' of ' + total.toLocaleString() +
+				' ' + state.catalog.type + ' · page ' + (state.catalog.page + 1) + '/' + totalPages;
+		}
+		if (prevBtn) prevBtn.disabled = state.catalog.page <= 0;
+		if (nextBtn) nextBtn.disabled = state.catalog.page >= totalPages - 1;
 	}
 
 	function renderPlayLog() {
@@ -538,92 +735,180 @@
 		};
 	}
 
+	function playsMinutesTooltip(plays, minutes, totalPlays) {
+		const pct = totalPlays ? ((plays / totalPlays) * 100) : 0;
+		return [
+			'<div class="apex-tooltip-custom">',
+			'<div><strong>' + plays.toLocaleString() + ' plays</strong></div>',
+			'<div>' + formatMinutes(minutes) + ' min</div>',
+			'<div>' + pct.toFixed(1) + '%</div>',
+			'</div>'
+		].join('');
+	}
+
 	function renderCharts(stats) {
-		if (typeof ApexCharts === 'undefined') return;
+		if (typeof ApexCharts === 'undefined' || !stats) return;
+		readChartPrefs();
 		destroyCharts();
 
-		const daily = stats.daily;
-		const useWeekly = daily.length > 90;
-		let timeLabels = [];
-		let timeMinutes = [];
-
-		if (useWeekly && daily.length) {
-			const weeks = {};
-			daily.forEach(function (d) {
-				const dt = new Date(d.date + 'T00:00:00Z');
-				const day = dt.getUTCDay();
-				const mondayOffset = (day + 6) % 7;
-				dt.setUTCDate(dt.getUTCDate() - mondayOffset);
-				const key = toDateInputValue(dt);
-				if (!weeks[key]) weeks[key] = 0;
-				weeks[key] += d.minutes;
-			});
-			timeLabels = Object.keys(weeks).sort();
-			timeMinutes = timeLabels.map(function (k) { return Math.round(weeks[k] * 10) / 10; });
-		} else {
-			timeLabels = daily.map(function (d) { return d.date; });
-			timeMinutes = daily.map(function (d) { return Math.round(d.minutes * 10) / 10; });
-		}
+		const granularity = state.chartPrefs.timeGranularity;
+		const unit = state.chartPrefs.timeUnit;
+		const unitLabel = unit === 'hours' ? 'Hours' : 'Minutes';
+		const buckets = bucketDaily(stats.daily, granularity);
+		const timeLabels = buckets.map(function (b) { return b.label; });
+		const timeValues = buckets.map(function (b) {
+			const v = unit === 'hours' ? b.minutes / 60 : b.minutes;
+			return Math.round(v * 100) / 100;
+		});
 
 		const timeEl = document.getElementById('chartListeningOverTime');
 		if (timeEl) {
 			const titleEl = document.getElementById('chartListeningOverTimeTitle');
-			if (titleEl) titleEl.textContent = useWeekly ? 'Listening time (weekly minutes)' : 'Listening time (daily minutes)';
+			if (titleEl) {
+				titleEl.textContent = 'Listening time (' + granularity + ' · ' + unit + ')';
+			}
+			const chartHeight = 320;
 			state.charts.time = new ApexCharts(timeEl, Object.assign({}, baseChartOptions(), {
-				chart: Object.assign({}, baseChartOptions().chart, { type: 'area', height: 280 }),
-				series: [{ name: 'Minutes', data: timeMinutes }],
-				xaxis: { categories: timeLabels, labels: { show: timeLabels.length < 40, rotate: -45 } },
-				yaxis: { title: { text: 'Minutes' }, labels: { formatter: function (v) { return Math.round(v); } } },
+				chart: Object.assign({}, baseChartOptions().chart, {
+					type: 'area',
+					height: chartHeight
+				}),
+				series: [{ name: unitLabel, data: timeValues }],
+				xaxis: {
+					categories: timeLabels,
+					labels: {
+						show: true,
+						rotate: -90,
+						rotateAlways: true,
+						hideOverlappingLabels: false,
+						trim: false,
+						style: { fontSize: '11px' }
+					}
+				},
+				yaxis: {
+					title: { text: unitLabel },
+					labels: {
+						formatter: function (v) {
+							return unit === 'hours' ? (Math.round(v * 10) / 10) : Math.round(v);
+						}
+					}
+				},
 				stroke: { curve: 'smooth', width: 2 },
 				fill: {
 					type: 'gradient',
 					gradient: { shadeIntensity: 1, opacityFrom: 0.45, opacityTo: 0.05, stops: [0, 90, 100] }
 				},
 				colors: [CHART_COLORS.primary],
-				dataLabels: { enabled: false }
+				dataLabels: { enabled: false },
+				tooltip: {
+					theme: 'dark',
+					y: {
+						formatter: function (val) {
+							return unit === 'hours'
+								? (Math.round(val * 100) / 100) + ' h'
+								: (Math.round(val * 10) / 10) + ' min';
+						}
+					}
+				}
 			}));
 			state.charts.time.render();
 		}
 
+		const topArtistsN = state.chartPrefs.topArtistsN;
 		const artistEl = document.getElementById('chartTopArtists');
 		if (artistEl) {
-			const artists = stats.topArtists.slice(0, 10).reverse();
+			// Highest first = top of chart (Apex categories draw top→bottom in order)
+			const artists = stats.topArtists.slice(0, topArtistsN);
+			const barHeight = Math.max(280, artists.length * 28);
 			state.charts.artists = new ApexCharts(artistEl, Object.assign({}, baseChartOptions(), {
-				chart: Object.assign({}, baseChartOptions().chart, { type: 'bar', height: 320 }),
-				plotOptions: { bar: { horizontal: true, borderRadius: 4 } },
-				series: [{ name: 'Minutes', data: artists.map(function (a) { return Math.round(a.minutes); }) }],
-				xaxis: { categories: artists.map(function (a) { return a.name; }) },
+				chart: Object.assign({}, baseChartOptions().chart, { type: 'bar', height: barHeight }),
+				plotOptions: { bar: { horizontal: true, borderRadius: 4, barHeight: '70%' } },
+				series: [{ name: 'Minutes', data: artists.map(function (a) { return Math.round(a.minutes * 10) / 10; }) }],
+				xaxis: {
+					categories: artists.map(function (a) { return a.name; }),
+					title: { text: 'Minutes' }
+				},
+				yaxis: {
+					labels: { maxWidth: 160, style: { fontSize: '12px' } }
+				},
 				colors: [CHART_COLORS.blue],
-				dataLabels: { enabled: false }
+				dataLabels: { enabled: false },
+				tooltip: {
+					theme: 'dark',
+					y: { formatter: function (v) { return v + ' min'; } }
+				}
 			}));
 			state.charts.artists.render();
 		}
 
+		const topTracksN = state.chartPrefs.topTracksN;
 		const trackEl = document.getElementById('chartTopTracks');
 		if (trackEl) {
-			const tracks = stats.topTracks.slice(0, 10).reverse();
+			const tracks = stats.topTracks.slice(0, topTracksN);
+			const barHeight = Math.max(280, tracks.length * 28);
 			state.charts.tracks = new ApexCharts(trackEl, Object.assign({}, baseChartOptions(), {
-				chart: Object.assign({}, baseChartOptions().chart, { type: 'bar', height: 320 }),
-				plotOptions: { bar: { horizontal: true, borderRadius: 4 } },
-				series: [{ name: 'Minutes', data: tracks.map(function (t) { return Math.round(t.minutes); }) }],
-				xaxis: { categories: tracks.map(function (t) { return t.name; }) },
+				chart: Object.assign({}, baseChartOptions().chart, { type: 'bar', height: barHeight }),
+				plotOptions: { bar: { horizontal: true, borderRadius: 4, barHeight: '70%' } },
+				series: [{ name: 'Minutes', data: tracks.map(function (t) { return Math.round(t.minutes * 10) / 10; }) }],
+				xaxis: {
+					categories: tracks.map(function (t) { return t.name; }),
+					title: { text: 'Minutes' }
+				},
+				yaxis: {
+					labels: { maxWidth: 160, style: { fontSize: '12px' } }
+				},
 				colors: [CHART_COLORS.magenta],
-				dataLabels: { enabled: false }
+				dataLabels: { enabled: false },
+				tooltip: {
+					theme: 'dark',
+					y: { formatter: function (v) { return v + ' min'; } }
+				}
 			}));
 			state.charts.tracks.render();
 		}
 
+		const totalPlays = stats.totalPlays || 1;
+
 		const typeEl = document.getElementById('chartContentType');
 		if (typeEl) {
 			const labels = Object.keys(stats.contentTypes);
-			const values = labels.map(function (k) { return stats.contentTypes[k]; });
+			const values = labels.map(function (k) { return stats.contentTypes[k].plays; });
+			const minutesByLabel = labels.map(function (k) { return stats.contentTypes[k].minutes; });
 			state.charts.types = new ApexCharts(typeEl, Object.assign({}, baseChartOptions(), {
 				chart: Object.assign({}, baseChartOptions().chart, { type: 'donut', height: 300 }),
 				series: values,
 				labels: labels,
 				colors: [CHART_COLORS.primary, CHART_COLORS.blue, CHART_COLORS.amber, CHART_COLORS.purple],
 				legend: { position: 'bottom' },
-				dataLabels: { enabled: true }
+				dataLabels: {
+					enabled: true,
+					formatter: function (val) {
+						return Math.round(val) + '%';
+					}
+				},
+				tooltip: {
+					theme: 'dark',
+					custom: function (ctx) {
+						const i = ctx.seriesIndex;
+						return playsMinutesTooltip(values[i], minutesByLabel[i], totalPlays);
+					}
+				},
+				plotOptions: {
+					pie: {
+						donut: {
+							labels: {
+								show: true,
+								total: {
+									show: true,
+									label: 'plays',
+									formatter: function () {
+										return totalPlays.toLocaleString();
+									}
+								}
+							}
+						}
+					}
+				}
 			}));
 			state.charts.types.render();
 		}
@@ -631,28 +916,63 @@
 		const platformEl = document.getElementById('chartPlatforms');
 		if (platformEl) {
 			const labels = Object.keys(stats.platforms).sort(function (a, b) {
-				return stats.platforms[b] - stats.platforms[a];
+				return stats.platforms[b].plays - stats.platforms[a].plays;
 			});
+			const playVals = labels.map(function (k) { return stats.platforms[k].plays; });
+			const minVals = labels.map(function (k) { return stats.platforms[k].minutes; });
 			state.charts.platforms = new ApexCharts(platformEl, Object.assign({}, baseChartOptions(), {
 				chart: Object.assign({}, baseChartOptions().chart, { type: 'bar', height: 300 }),
-				series: [{ name: 'Plays', data: labels.map(function (k) { return stats.platforms[k]; }) }],
-				xaxis: { categories: labels },
+				series: [{ name: 'Plays', data: playVals }],
+				xaxis: {
+					categories: labels,
+					title: { text: 'Plays' },
+					labels: { rotate: -45 }
+				},
+				yaxis: { title: { text: 'Plays' } },
 				colors: [CHART_COLORS.amber],
-				dataLabels: { enabled: false }
+				dataLabels: {
+					enabled: true,
+					formatter: function (val) { return val.toLocaleString(); }
+				},
+				tooltip: {
+					theme: 'dark',
+					custom: function (ctx) {
+						const i = ctx.dataPointIndex;
+						return playsMinutesTooltip(playVals[i], minVals[i], totalPlays);
+					}
+				}
 			}));
 			state.charts.platforms.render();
 		}
 
 		const reasonEl = document.getElementById('chartReasonEnd');
 		if (reasonEl) {
-			const entries = Object.entries(stats.reasonEnd).sort(function (a, b) { return b[1] - a[1]; }).slice(0, 8);
+			const entries = Object.entries(stats.reasonEnd)
+				.sort(function (a, b) { return b[1].plays - a[1].plays; })
+				.slice(0, 10);
+			const labels = entries.map(function (e) { return e[0]; });
+			const playVals = entries.map(function (e) { return e[1].plays; });
+			const minVals = entries.map(function (e) { return e[1].minutes; });
 			state.charts.reason = new ApexCharts(reasonEl, Object.assign({}, baseChartOptions(), {
-				chart: Object.assign({}, baseChartOptions().chart, { type: 'bar', height: 300 }),
+				chart: Object.assign({}, baseChartOptions().chart, { type: 'bar', height: Math.max(280, labels.length * 32) }),
 				plotOptions: { bar: { horizontal: true, borderRadius: 4 } },
-				series: [{ name: 'Plays', data: entries.map(function (e) { return e[1]; }).reverse() }],
-				xaxis: { categories: entries.map(function (e) { return e[0]; }).reverse() },
+				series: [{ name: 'Plays', data: playVals }],
+				xaxis: {
+					categories: labels,
+					title: { text: 'Plays' }
+				},
 				colors: [CHART_COLORS.purple],
-				dataLabels: { enabled: false }
+				dataLabels: {
+					enabled: true,
+					formatter: function (val) { return val.toLocaleString(); }
+				},
+				tooltip: {
+					theme: 'dark',
+					custom: function (ctx) {
+						const i = ctx.dataPointIndex;
+						return playsMinutesTooltip(playVals[i], minVals[i], totalPlays);
+					}
+				}
 			}));
 			state.charts.reason.render();
 		}
@@ -670,7 +990,7 @@
 			return;
 		}
 
-		const stats = computeStats(state.filtered);
+		const stats = state.lastStats || computeStats(state.filtered);
 		const plays = state.filtered.map(function (r) {
 			return {
 				timestamp: r.ts,
@@ -708,13 +1028,13 @@
 			{ metric: 'Note', value: 'IP addresses omitted from export for privacy' }
 		];
 
-		const topArtists = stats.topArtists.map(function (a) {
+		const topArtists = stats.topArtists.slice(0, 50).map(function (a) {
 			return { artist: a.name, plays: a.plays, minutes: Math.round(a.minutes * 10) / 10 };
 		});
-		const topTracks = stats.topTracks.map(function (t) {
+		const topTracks = stats.topTracks.slice(0, 50).map(function (t) {
 			return {
 				track: t.name,
-				artist: t.artist,
+				artist: t.detail || t.artist || '',
 				plays: t.plays,
 				minutes: Math.round(t.minutes * 10) / 10
 			};
@@ -733,6 +1053,80 @@
 		XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(topArtists), 'Top Artists');
 		XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(topTracks), 'Top Tracks');
 		XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(daily), 'Daily');
+
+		const insights = state.insights;
+		if (insights && insights.fingerprint) {
+			const fp = insights.fingerprint;
+			const sessionsSheet = (fp.sessions || []).map(function (s, idx) {
+				return {
+					session: idx + 1,
+					start: new Date(s.start).toISOString(),
+					end: new Date(s.end).toISOString(),
+					plays: s.plays,
+					minutes: Math.round(s.minutes * 10) / 10
+				};
+			});
+			if (sessionsSheet.length) {
+				XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(sessionsSheet), 'Sessions');
+			}
+
+			const clockRows = [];
+			const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+			(fp.clock || []).forEach(function (row, wd) {
+				for (let h = 0; h < 24; h++) {
+					clockRows.push({
+						weekday: dayNames[wd],
+						hour: h,
+						minutes: Math.round((row[h] || 0) * 10) / 10
+					});
+				}
+			});
+			if (clockRows.length) {
+				XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(clockRows), 'Clock');
+			}
+		}
+
+		if (insights && insights.artists && insights.artists.artists) {
+			const lifecycle = insights.artists.artists.slice(0, 200).map(function (a) {
+				return {
+					artist: a.name,
+					plays: a.plays,
+					minutes: Math.round(a.minutes * 10) / 10,
+					span_days: a.span,
+					unique_tracks: a.trackCount,
+					kind: a.kind,
+					first: a.first ? a.first.toISOString() : '',
+					last: a.last ? a.last.toISOString() : ''
+				};
+			});
+			XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(lifecycle), 'Artist Lifecycle');
+		}
+
+		if (insights && insights.taste && insights.taste.monthly) {
+			const discovery = insights.taste.monthly.map(function (m) {
+				return {
+					month: m.month,
+					new_artists: m.newArtists,
+					new_tracks: m.newTracks,
+					novelty_pct: Math.round(m.noveltyPct * 10) / 10,
+					in_warmup: m.inWarmup
+				};
+			});
+			XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(discovery), 'Discovery Monthly');
+		}
+
+		if (insights && insights.attention) {
+			const att = insights.attention;
+			const completion = [
+				{ bucket: '0-20%', plays: (att.completionBuckets || [])[0] || 0 },
+				{ bucket: '20-40%', plays: (att.completionBuckets || [])[1] || 0 },
+				{ bucket: '40-60%', plays: (att.completionBuckets || [])[2] || 0 },
+				{ bucket: '60-80%', plays: (att.completionBuckets || [])[3] || 0 },
+				{ bucket: '80-100%', plays: (att.completionBuckets || [])[4] || 0 },
+				{ bucket: 'mean_completion', plays: Math.round((att.meanCompletion || 0) * 1000) / 10 }
+			];
+			XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(completion), 'Completion');
+		}
 
 		const today = toDateInputValue(new Date());
 		const filename = 'spotify-listening-' + today + '.xlsx';
@@ -754,15 +1148,58 @@
 
 	// ---------- orchestration ----------
 
+	function switchInsightTab(tabId) {
+		state.activeInsightTab = tabId || 'overview';
+		if (typeof SpotifyInsights !== 'undefined') {
+			SpotifyInsights.setActiveTab(state.activeInsightTab);
+		}
+
+		document.querySelectorAll('.insight-tab').forEach(function (btn) {
+			btn.classList.toggle('active', btn.getAttribute('data-insight-tab') === state.activeInsightTab);
+		});
+		document.querySelectorAll('.insight-panel').forEach(function (panel) {
+			const id = panel.getAttribute('data-insight-panel');
+			const on = id === state.activeInsightTab;
+			panel.hidden = !on;
+			panel.classList.toggle('active', on);
+		});
+
+		if (state.activeInsightTab === 'overview') {
+			if (state.lastStats) renderCharts(state.lastStats);
+		} else if (state.insights && typeof SpotifyInsights !== 'undefined') {
+			SpotifyInsights.renderTab(state.activeInsightTab, state.insights);
+		}
+	}
+
 	function applyFiltersAndRender() {
 		readFiltersFromDom();
+		readChartPrefs();
 		state.filtered = filterRecords(state.allRecords, state.filters);
 		state.page = 0;
+		state.catalog.page = 0;
 		const stats = computeStats(state.filtered);
+		state.lastStats = stats;
+
+		if (typeof SpotifyInsights !== 'undefined') {
+			SpotifyInsights.destroyAll();
+			state.insights = SpotifyInsights.compute(state.filtered, state.filters.timezone);
+		} else {
+			state.insights = null;
+		}
+
 		renderStats(stats);
-		renderCharts(stats);
+		renderCatalog();
 		renderPlayLog();
 		setExplorerVisible(true);
+		switchInsightTab(state.activeInsightTab || 'overview');
+	}
+
+	function refreshChartsOnly() {
+		if (!state.lastStats) return;
+		readChartPrefs();
+		if (state.activeInsightTab === 'overview') {
+			renderCharts(state.lastStats);
+		}
 	}
 
 	async function ingestResult(result) {
@@ -814,6 +1251,9 @@
 		const applyBtn = document.getElementById('applyFiltersBtn');
 		const prevBtn = document.getElementById('playLogPrev');
 		const nextBtn = document.getElementById('playLogNext');
+		const catalogPrev = document.getElementById('catalogPrev');
+		const catalogNext = document.getElementById('catalogNext');
+		const catalogSearch = document.getElementById('catalogSearch');
 
 		if (fileInput) {
 			fileInput.addEventListener('change', function (e) {
@@ -843,11 +1283,54 @@
 		if (exportBtn) exportBtn.addEventListener('click', exportExcel);
 		if (applyBtn) applyBtn.addEventListener('click', applyFiltersAndRender);
 
-		['filterDateFrom', 'filterDateTo', 'filterContentType', 'filterPlatform', 'filterMedium', 'filterExcludeSkips']
+		['filterDateFrom', 'filterDateTo', 'filterContentType', 'filterPlatform', 'filterMedium', 'filterExcludeSkips', 'filterTimezone']
 			.forEach(function (id) {
 				const el = document.getElementById(id);
 				if (el) el.addEventListener('change', applyFiltersAndRender);
 			});
+
+		['timeGranularity', 'timeUnit', 'topArtistsN', 'topTracksN'].forEach(function (id) {
+			const el = document.getElementById(id);
+			if (el) el.addEventListener('change', refreshChartsOnly);
+		});
+
+		document.querySelectorAll('.insight-tab').forEach(function (btn) {
+			btn.addEventListener('click', function () {
+				switchInsightTab(btn.getAttribute('data-insight-tab') || 'overview');
+			});
+		});
+
+		document.querySelectorAll('.catalog-tab').forEach(function (btn) {
+			if (btn.classList.contains('insight-tab')) return;
+			btn.addEventListener('click', function () {
+				state.catalog.type = btn.getAttribute('data-catalog') || 'songs';
+				state.catalog.page = 0;
+				renderCatalog();
+			});
+		});
+
+		document.querySelectorAll('.sortable-th').forEach(function (th) {
+			th.addEventListener('click', function () {
+				const key = th.getAttribute('data-sort');
+				if (!key) return;
+				if (state.catalog.sortKey === key) {
+					state.catalog.sortDir = state.catalog.sortDir === 'asc' ? 'desc' : 'asc';
+				} else {
+					state.catalog.sortKey = key;
+					state.catalog.sortDir = (key === 'name' || key === 'detail') ? 'asc' : 'desc';
+				}
+				state.catalog.page = 0;
+				renderCatalog();
+			});
+		});
+
+		if (catalogSearch) {
+			catalogSearch.addEventListener('input', function () {
+				state.catalog.search = catalogSearch.value || '';
+				state.catalog.page = 0;
+				renderCatalog();
+			});
+		}
 
 		if (prevBtn) {
 			prevBtn.addEventListener('click', function () {
@@ -859,6 +1342,18 @@
 			nextBtn.addEventListener('click', function () {
 				state.page += 1;
 				renderPlayLog();
+			});
+		}
+		if (catalogPrev) {
+			catalogPrev.addEventListener('click', function () {
+				state.catalog.page -= 1;
+				renderCatalog();
+			});
+		}
+		if (catalogNext) {
+			catalogNext.addEventListener('click', function () {
+				state.catalog.page += 1;
+				renderCatalog();
 			});
 		}
 	}
