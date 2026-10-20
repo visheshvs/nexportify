@@ -81,7 +81,7 @@ class PlaylistTable extends React.Component {
 		}
 		albums = (await Promise.all(albums)).flat() // flatten list of lists into just a list
 		let songs = [], record_labels = {} // save record labels too, so csvData doesn't have to query albums again
-		for (let a of albums) {
+		for (let a of albums.filter(Boolean)) {
 			record_labels[a.album.id] = a.album.label
 			for (let tracks = a.album.tracks; tracks; tracks = tracks.next && await utils.apiCall(tracks.next)) { // if there is a tracks.next, follow it
 				songs.push(...tracks.items.map(track => ({id: track.id, added_at: a.added_at}))) // added_at is when the album was saved
