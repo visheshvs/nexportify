@@ -26,8 +26,11 @@
 
 	<header class="main-header visible" id="mainHeader">
 		<div class="header-content">
-			<a href="index.html" class="logo">Nexporify</a>
-			<a href="index.html" class="btn btn-action">Back to Playlists</a>
+			<a href="./" class="logo">Nexporify</a>
+			<nav class="site-nav" aria-label="Features">
+				<a href="./#playlist-metadata" class="site-nav-link">Playlist Metadata</a>
+				<a href="spotify-data.html" class="site-nav-link active" aria-current="page">Listening History</a>
+			</nav>
 		</div>
 	</header>
 
@@ -38,9 +41,8 @@
 			<h1 class="hero-title">Listening Data<br/>Exploration</h1>
 			<p class="hero-subtitle">Request Extended Streaming History, then explore it here</p>
 			<p class="hero-description-text">
-				Parse Spotify’s Extended Streaming History JSON in your browser — sample files from
-				<code>data/</code> or your own upload. Filter, chart, and export structured Excel.
-				Nothing is uploaded to a server.
+				Parse Spotify’s Extended Streaming History JSON in your browser. Filter, chart, and
+				export structured Excel. Nothing is uploaded to a server.
 			</p>
 		</div>
 	</section>
@@ -88,8 +90,7 @@
 					<strong>Unzip and load JSON here</strong>
 					<p>
 						Look for files named like <code>Streaming_History_Audio_*.json</code> and
-						<code>Streaming_History_Video_*.json</code>. Upload them below (or place samples in
-						<code>data/</code> and use Load sample).
+						<code>Streaming_History_Video_*.json</code>. Upload them below.
 					</p>
 				</li>
 			</ol>
@@ -138,8 +139,7 @@
 			<h2 class="data-panel-title">Load Your Files</h2>
 			<p class="data-panel-lead">
 				Upload one or more Extended Streaming History <code>.json</code> files. Processing stays on
-				this device. Sample files in the gitignored <code>data/</code> folder can be loaded when you
-				serve the site locally (e.g. <code>python -m http.server 8000</code>).
+				this device.
 			</p>
 
 			<div class="data-upload-row">
@@ -157,16 +157,6 @@
 						<div class="upload-hint">Streaming_History_Audio / Video · multiple files OK</div>
 					</label>
 				</div>
-				<button type="button" class="upload-zone upload-zone-button" id="loadSampleBtn">
-					<div class="upload-icon">
-						<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-							<path d="M3 3v18h18"></path>
-							<path d="M7 14l4-4 4 4 5-6"></path>
-						</svg>
-					</div>
-					<div class="upload-text">Load sample data</div>
-					<div class="upload-hint">from local data/ folder</div>
-				</button>
 			</div>
 			<div id="spotifyDataUploadStatus" class="upload-status" style="display: none;"></div>
 		</section>

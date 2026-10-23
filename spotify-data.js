@@ -6,12 +6,6 @@
 (function (global) {
 	'use strict';
 
-	const SAMPLE_FILES = [
-		'data/Streaming_History_Audio_2025.json',
-		'data/Streaming_History_Audio_2025_1.json',
-		'data/Streaming_History_Video_2025.json'
-	];
-
 	const PAGE_SIZE = 50;
 	const CATALOG_PAGE_SIZE = 50;
 	const SHORT_PLAY_MS = 30000;
@@ -256,35 +250,6 @@
 		}
 		if (!all.length) {
 			throw new Error(errors.join(' ') || 'No valid streaming records found.');
-		}
-		all.sort(function (a, b) {
-			const ta = a.date ? a.date.getTime() : 0;
-			const tb = b.date ? b.date.getTime() : 0;
-			return ta - tb;
-		});
-		return { records: all, errors: errors };
-	}
-
-	async function loadSampleData() {
-		const all = [];
-		const errors = [];
-		for (let i = 0; i < SAMPLE_FILES.length; i++) {
-			const path = SAMPLE_FILES[i];
-			try {
-				const res = await fetch(path);
-				if (!res.ok) throw new Error('HTTP ' + res.status);
-				const text = await res.text();
-				const name = path.split('/').pop();
-				all.push.apply(all, parseJsonText(text, name));
-			} catch (e) {
-				errors.push(path + ': ' + e.message);
-			}
-		}
-		if (!all.length) {
-			throw new Error(
-				'Could not load sample files from data/. Place Streaming_History_*.json there and serve the site over HTTP, or upload files instead. ' +
-				errors.join(' ')
-			);
 		}
 		all.sort(function (a, b) {
 			const ta = a.date ? a.date.getTime() : 0;
@@ -1228,25 +1193,9 @@
 		}
 	}
 
-	async function handleLoadSample() {
-		showStatus('Loading sample data from data/…', 'processing');
-		const btn = document.getElementById('loadSampleBtn');
-		if (btn) btn.disabled = true;
-		try {
-			const result = await loadSampleData();
-			await ingestResult(result);
-		} catch (e) {
-			showStatus(e.message || String(e), 'error');
-			setExplorerVisible(false);
-		} finally {
-			if (btn) btn.disabled = false;
-		}
-	}
-
 	function bindUi() {
 		const fileInput = document.getElementById('spotifyDataUpload');
 		const uploadZone = document.getElementById('spotifyDataUploadZone');
-		const loadSampleBtn = document.getElementById('loadSampleBtn');
 		const exportBtn = document.getElementById('exportExcelBtn');
 		const applyBtn = document.getElementById('applyFiltersBtn');
 		const prevBtn = document.getElementById('playLogPrev');
@@ -1279,7 +1228,6 @@
 			});
 		}
 
-		if (loadSampleBtn) loadSampleBtn.addEventListener('click', handleLoadSample);
 		if (exportBtn) exportBtn.addEventListener('click', exportExcel);
 		if (applyBtn) applyBtn.addEventListener('click', applyFiltersAndRender);
 
@@ -1371,7 +1319,6 @@
 
 	global.SpotifyDataExplorer = {
 		parseStreamingFiles: parseStreamingFiles,
-		loadSampleData: loadSampleData,
 		filterRecords: filterRecords,
 		computeStats: computeStats,
 		exportExcel: exportExcel

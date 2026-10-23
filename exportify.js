@@ -2,6 +2,20 @@
 const utils = {
 	_refreshPromise: null,
 
+	// Spotify matches redirect URIs exactly, so every way of reaching the home page (/nexportify, /nexportify/,
+	// /nexportify/index.html) must map to the single URI registered in the Spotify Developer Dashboard.
+	redirectUri() {
+		return location.origin + location.pathname.replace(/index\.html$/, '').replace(/\/$/, '')
+	},
+
+	// The #error box starts hidden; reveal it whenever there's something to say.
+	showError(html, append=false) {
+		if (typeof error === 'undefined' || !error) return
+		error.innerHTML = append ? error.innerHTML + html : html
+		error.style.display = error.innerHTML ? 'block' : 'none'
+		if (error.innerHTML && !append) error.scrollIntoView({ behavior: 'smooth', block: 'center' })
+	},
+
 	getTokenAgeMs() {
 		const timestamp = Number(localStorage.getItem('access_token_timestamp'));
 		if (!timestamp || Number.isNaN(timestamp)) return Infinity;
@@ -18,8 +32,7 @@ const utils = {
 		if (!refreshToken) {
 			throw new Error('No refresh token available');
 		}
-		// Get full redirect URI including path (for GitHub Pages subdirectory support)
-		let redirectUri = location.origin + location.pathname.replace(/\/$/, '');
+		let redirectUri = this.redirectUri();
 		let response = await fetch("https://accounts.spotify.com/api/token", {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -74,8 +87,7 @@ const utils = {
 		let code_challenge = btoa(String.fromCharCode(...new Uint8Array(hashed))).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_')
 
 		localStorage.setItem('code_verifier', code_verifier) // save the random string secret
-		// Get full redirect URI including path (for GitHub Pages subdirectory support)
-		let redirectUri = location.origin + location.pathname.replace(/\/$/, ''); // Remove trailing slash
+		let redirectUri = this.redirectUri();
 		location = "https://accounts.spotify.com/authorize?client_id=d07d8c2ddb3646d4b4fb3781ffc6d2bc" +
 			"&redirect_uri=" + encodeURIComponent(redirectUri) +
 			"&scope=playlist-read-private%20playlist-read-collaborative%20user-library-read" + // access to particular scopes of info defined here
@@ -135,29 +147,9 @@ const utils = {
 			console.error('403 Forbidden - Access denied to:', url);
 			console.error('Error details:', errorText);
 			if (url.includes('audio-features')) {
-				console.error('Audio features endpoint returned 403. This usually means:');
-				console.error('1. The access token is invalid or expired');
-				console.error('2. The token was issued by a different Spotify app');
-				console.error('3. The token needs to be refreshed');
-				console.error('Current access token (first 20 chars):', accessToken?.substring(0, 20));
-				
-				// Clear the invalid token and force re-authentication
-				localStorage.removeItem('access_token');
-				localStorage.removeItem('access_token_timestamp');
-				
-				// Show user-friendly error
-				if (typeof error !== 'undefined' && error) {
-					error.innerHTML = '<p style="color: #ff6b6b; font-size: 18px; margin-bottom: 20px;">⚠️ Audio Features Access Denied</p>' +
-						'<p>The access token does not have permission to fetch audio features. This usually happens when:</p>' +
-						'<ul style="text-align: left; display: inline-block; margin: 20px 0;">' +
-						'<li>You created a new Spotify app but are using an old access token</li>' +
-						'<li>The access token has expired or is invalid</li>' +
-						'</ul>' +
-						'<p><strong>Solution:</strong> The invalid token has been cleared. Please click "Get Started" to re-authenticate.</p>' +
-						'<p style="margin-top: 20px;"><button onclick="location.reload()" style="padding: 10px 20px; background: #1DB954; color: white; border: none; border-radius: 5px; cursor: pointer;">Refresh Page & Re-authenticate</button></p>';
-				}
-				
-				// Return empty features array to allow export to continue without features
+				// Spotify no longer serves audio features to apps created after Nov 2024. That's expected, not an
+				// auth failure: keep the session and continue without features (Advanced Analysis covers them).
+				console.warn('Audio features unavailable for this Spotify app; continuing without them.');
 				return { audio_features: [] };
 			}
 			throw new Error('403 Forbidden: ' + errorText);
@@ -169,12 +161,12 @@ const utils = {
 			//	still downloading. But <a href="https://github.com/pavelkomarov/exportify/issues">I would be interested to hear about this.</a></p><br/>' }
 			return utils.apiCall(url, response.headers.get('Retry-After')*1000) } // API Rate-limiting encountered, so tail-call replacement request on a delay
 		else if (response.status == 502 && bad_gateway_retries > 0) {
-			if (!error.innerHTML.includes("fa-bolt")) { error.innerHTML += '<p><i class="fa fa-bolt" style="font-size: 50px; margin-bottom: 20px">\
+			if (!error.innerHTML.includes("fa-bolt")) { utils.showError('<p><i class="fa fa-bolt" style="font-size: 50px; margin-bottom: 20px">\
 				</i></p><p>Exportify has encountered a <a target="_blank" href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/502">\
 				bad gateway</a> while querying endpoint ' + url.split('?')[0] + '!<br/>Retries are implemented, so your download may still succeed. \
-				But <a href="https://github.com/pavelkomarov/exportify/issues">I would be interested to hear about this.</a></p><br/>' }
+				But <a href="https://github.com/pavelkomarov/exportify/issues">I would be interested to hear about this.</a></p><br/>', true) }
             return utils.apiCall(url, (3-bad_gateway_retries)*1000, bad_gateway_retries-1) }
-		else { error.innerHTML = "The server returned an unhandled kind of HTTP response: " + response.status } // the caller will fail
+		else { throw new Error("Spotify returned HTTP " + response.status + " for " + url.split('?')[0]) } // the caller decides how to surface it
 	},
 
 	// Logging out of Spotify is much like logging in: You have to navigate to a certain url. But unlike logging in, there is
@@ -196,12 +188,40 @@ class PlaylistTable extends React.Component {
 	// Solve this with a separate function that initializes object data. Call it from render().
 	// https://stackoverflow.com/questions/43431550/how-can-i-invoke-asynchronous-code-within-a-constructor
 	async init() {
+		try {
+			await this.loadPlaylists()
+		} catch (e) {
+			console.error('Failed to load playlists:', e)
+			const msg = String(e && e.message || e)
+			const hint = /403/.test(msg)
+				? '<p>Spotify refused access for this account. This app runs in Spotify <em>Development Mode</em>, which only allows ' +
+				  'users the app owner has added under <strong>User Management</strong> in the Spotify Developer Dashboard ' +
+				  '(and the owner needs Spotify Premium). You can still use <strong>Advanced Analysis</strong> by uploading a CSV ' +
+				  'from <a href="https://exportify.net" target="_blank" rel="noopener">exportify.net</a>.</p>'
+				: ''
+			utils.showError('<p><strong>Couldn\'t load your playlists.</strong> ' + PlaylistExporter.escapeHtml(msg) + '</p>' + hint +
+				'<p><button class="btn btn-action" onclick="utils.logout()">Sign out and try again</button></p>')
+			ReactDOM.unmountComponentAtNode(playlistsContainer)
+		}
+	}
+
+	// Spotify's Feb 2026 Web API changes renamed a playlist's `tracks` field to `items` for Development Mode apps.
+	// Normalize to the old shape so the rest of the code keeps working either way.
+	static normalizePlaylist(p) {
+		const contents = p.tracks || p.items || {}
+		return Object.assign({}, p, { tracks: {
+			total: contents.total ?? 0,
+			href: contents.href || ('https://api.spotify.com/v1/playlists/' + p.id + '/items')
+		}})
+	}
+
+	async loadPlaylists() {
 		let user = await utils.apiCall("https://api.spotify.com/v1/me")
 		let library = await utils.apiCall("https://api.spotify.com/v1/me/tracks?offset=0&limit=1")
 
 		// fake a playlist-like structure for the liked songs, so it plays well with the rest of the code
 		let liked_songs = {name: "Liked Songs", external_urls: {spotify: "https://open.spotify.com/collection/tracks"},
-			images:[{url: "liked_songs.jpeg"}], owner: {id: user.id, external_urls: {spotify: user.external_urls.spotify}},
+			images:[{url: "liked_songs.jpeg"}], owner: {id: user.id, external_urls: {spotify: user.external_urls?.spotify}},
 			tracks: {total: library.total, href: "https://api.spotify.com/v1/me/tracks"}}
 		let playlists = [[liked_songs]] // double list so .flat() flattens everything right later
 
@@ -209,12 +229,13 @@ class PlaylistTable extends React.Component {
 		// needs to be garnered from a response, so await the first response, then send a volley of requests to get the rest.
 		// https://developer.spotify.com/documentation/web-api/reference/get-list-users-playlists
 		let response = await utils.apiCall("https://api.spotify.com/v1/me/playlists?limit=50&offset=0")
-		playlists.push(response.items)
+		playlists.push(response.items.filter(p => p).map(PlaylistTable.normalizePlaylist))
 		let requests = []
 		for (let offset = 50; offset < response.total; offset += 50) {
 			requests.push(utils.apiCall("https://api.spotify.com/v1/me/playlists?limit=50&offset=" + offset, 2*offset-100))
 		}
-		await Promise.all(requests).then(responses => responses.map(response => playlists.push(response.items)))
+		await Promise.all(requests).then(responses => responses.map(response =>
+			playlists.push(response.items.filter(p => p).map(PlaylistTable.normalizePlaylist))))
 
 		//add info to this Component's state. Use setState() so render() gets called again.
 		const flatPlaylists = playlists.flat();
@@ -473,7 +494,7 @@ class PlaylistTable extends React.Component {
 				)
 			)
 		} else {
-			this.init()
+			if (!this.initStarted) { this.initStarted = true; this.init() }
 			return React.createElement("div", { className: "spinner"})
 		}
 	}
@@ -527,6 +548,37 @@ let PlaylistExporter = {
 		});
 	},
 
+	// Popup blockers only allow window.open() during the click itself, before any await. So open a placeholder tab
+	// immediately and fill it in once the report is ready.
+	openReportWindow() {
+		const win = window.open('', '_blank')
+		if (win) {
+			win.document.write('<!doctype html><title>Preparing analysis…</title><body style="background:#0a0a0a;color:#fff;' +
+				'font-family:Inter,system-ui,sans-serif;display:grid;place-items:center;height:100vh;margin:0">Preparing analysis…</body>')
+		}
+		return win
+	},
+
+	// Write the report into the placeholder tab, or, if the browser blocked it, offer a button that opens it on click.
+	showReport(win, html, statusEl) {
+		if (win && !win.closed) {
+			win.document.open()
+			win.document.write(html)
+			win.document.close()
+			return true
+		}
+		const target = statusEl || error
+		if (statusEl) statusEl.className = 'upload-status success'
+		target.innerHTML = 'Your analysis is ready. <button type="button" class="btn btn-action">Open analysis</button>'
+		target.style.display = 'block'
+		target.querySelector('button').onclick = () => {
+			const w = window.open('', '_blank')
+			if (!w) { target.textContent = 'Please allow pop-ups for this site to view the analysis.'; return }
+			w.document.write(html); w.document.close()
+		}
+		return false
+	},
+
 	// Analyze an uploaded CSV file
 	async analyzeFromUpload(file) {
 		const uploadStatus = document.getElementById('uploadStatus');
@@ -539,8 +591,16 @@ let PlaylistExporter = {
 				uploadStatus.textContent = 'Processing CSV file...';
 			}
 			
+			const reportWindow = this.openReportWindow();
+
 			// Parse the CSV
-			const csvContent = await this.parseUploadedCSV(file);
+			let csvContent;
+			try {
+				csvContent = await this.parseUploadedCSV(file);
+			} catch (e) {
+				if (reportWindow) reportWindow.close();
+				throw e;
+			}
 			
 			// Create a fake playlist object for the analysis
 			const playlistName = file.name.replace('.csv', '').replace(/_/g, ' ');
@@ -552,18 +612,10 @@ let PlaylistExporter = {
 				tracks: { total: csvContent.split('\n').length - 1 }
 			};
 			
-			// Open analysis window
-			const analysisWindow = window.open('', '_blank');
-			if (!analysisWindow) {
-				throw new Error('Could not open analysis window. Please allow popups for this site.');
-			}
-			
-			// Generate and write the HTML
-			analysisWindow.document.write(this.generateAnalysisHTML(fakePlaylist, csvContent));
-			analysisWindow.document.close();
+			const opened = this.showReport(reportWindow, this.generateAnalysisHTML(fakePlaylist, csvContent), uploadStatus);
 			
 			// Show success message
-			if (uploadStatus) {
+			if (opened && uploadStatus) {
 				uploadStatus.className = 'upload-status success';
 				uploadStatus.textContent = '✓ CSV analyzed successfully! Analysis opened in new window.';
 				setTimeout(() => {
@@ -590,8 +642,8 @@ let PlaylistExporter = {
 			let csv = await this.csvData(playlist)
 			saveAs(new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" }), this.fileName(playlist) + ".csv")
 		} catch (e) {
-			error.innerHTML += "Couldn't export " + playlist.name + ". Encountered <tt>" + e + "</tt><br/>" + e.stack +
-					'<br/>Please <a href="https://github.com/pavelkomarov/exportify/issues">let us know</a>.'
+			utils.showError("Couldn't export " + this.escapeHtml(playlist.name) + ". Encountered <tt>" + this.escapeHtml(String(e)) + "</tt><br/>" +
+					'Please <a href="https://github.com/visheshvs/nexportify/issues">let us know</a>.', true)
 		} finally { // change back the export button's text
 			const exportBtnReset = document.getElementById("export"+row)
 			if (exportBtnReset) exportBtnReset.textContent = 'Export'
@@ -602,16 +654,15 @@ let PlaylistExporter = {
 	async analyze(playlist, row) {
 		const analyzeBtn = document.getElementById("analyze"+row)
 		if (analyzeBtn) analyzeBtn.textContent = 'Analyzing...' // spinner on button
+		const reportWindow = this.openReportWindow()
 		try {
 			let csv = await this.csvData(playlist)
 			// Use simple analysis (without audio features)
-			let html = this.generateSimpleAnalysisHTML(playlist, csv)
-			let newWindow = window.open('', '_blank')
-			newWindow.document.write(html)
-			newWindow.document.close()
+			this.showReport(reportWindow, this.generateSimpleAnalysisHTML(playlist, csv))
 		} catch (e) {
-			error.innerHTML += "Couldn't analyze " + playlist.name + ". Encountered <tt>" + e + "</tt><br/>" + e.stack +
-					'<br/>Please <a href="https://github.com/pavelkomarov/exportify/issues">let us know</a>.'
+			if (reportWindow) reportWindow.close()
+			utils.showError("Couldn't analyze " + this.escapeHtml(playlist.name) + ". Encountered <tt>" + this.escapeHtml(String(e)) + "</tt><br/>" +
+					'Please <a href="https://github.com/visheshvs/nexportify/issues">let us know</a>.', true)
 		} finally { // change back the analyze button's text
 			const analyzeBtnReset = document.getElementById("analyze"+row)
 			if (analyzeBtnReset) analyzeBtnReset.textContent = 'Analyze'
@@ -622,7 +673,7 @@ let PlaylistExporter = {
 	async exportAll(playlists) {
 		const exportAllBtn = document.getElementById("exportAll")
 		if (exportAllBtn) exportAllBtn.textContent = 'Exporting...' // spinner on button
-		error.innerHTML = ""
+		utils.showError("")
 		let zip = new JSZip()
 
 		for (let playlist of playlists) {
@@ -632,9 +683,8 @@ let PlaylistExporter = {
 				while (zip.file(fileName + ".csv")) { fileName += "_" } // Add underscores if the file already exists so playlists with duplicate names don't overwrite each other.
 				zip.file(fileName + ".csv", csv)
 			} catch (e) { // Surface all errors
-				error.innerHTML += "Couldn't export " + playlist.name + " with id " + playlist.id + ". Encountered <tt>" + e +
-					"</tt><br>" + e.stack + '<br>Please <a href="https://github.com/pavelkomarov/exportify/issues">let us know</a>. ' +
-					"The others are still being zipped.<br/>"
+				utils.showError("Couldn't export " + this.escapeHtml(playlist.name) + ". Encountered <tt>" + this.escapeHtml(String(e)) +
+					"</tt>. The others are still being zipped.<br/>", true)
 			}
 		}
 		const exportAllBtnReset = document.getElementById("exportAll")
@@ -645,6 +695,24 @@ let PlaylistExporter = {
 	// take the playlist object and return an acceptable filename
 	fileName(playlist) {
 		return playlist.name.replace(/[\/\\:*?"<>|]/g, '').replace(/\s+/g, '_')// /.../g is a Perl-style modifier, g for global, meaning all matches replaced
+	},
+
+	// Fetch full artist or album objects (where genres and record labels live). Uses the batch endpoint when the app
+	// is allowed to, and falls back to one request per id when Spotify refuses it (batch lookups were removed for
+	// Development Mode apps in Feb 2026). Never rejects: missing details just leave those CSV columns blank.
+	async fetchByIds(kind, ids, chunkSize, spacingMs) {
+		if (!ids.length) return []
+		let chunks = []; for (let i = 0; i < ids.length; i += chunkSize) chunks.push(ids.slice(i, i + chunkSize))
+		try {
+			let responses = await Promise.all(chunks.map((chunk, i) => utils.apiCall(
+				'https://api.spotify.com/v1/' + kind + '?ids=' + chunk.join(','), spacingMs*i)))
+			return responses.flatMap(r => r?.[kind] || [])
+		} catch (e) {
+			console.warn('Batch ' + kind + ' lookup failed (' + e.message + '); fetching individually.')
+		}
+		let singles = await Promise.all(ids.map((id, i) =>
+			utils.apiCall('https://api.spotify.com/v1/' + kind + '/' + id, 60*i).catch(() => null)))
+		return singles.filter(x => x)
 	},
 
 	// This is where the magic happens. The access token gives us permission to query this info from Spotify, and the
@@ -664,6 +732,7 @@ let PlaylistExporter = {
 		let data_promise = Promise.all(requests).then(responses => { // Gather all the data from the responses in a table.
 			return responses.map(response => { // apply to all responses
 				return response.items.map(song => { // apply to all songs in each response
+					if (!song.track && song.item) song = Object.assign({}, song, { track: song.item }) // Feb 2026 API renamed track -> item
 					// Safety check! If there are artists/album listed and they have non-null identifier, add them to the sets
 					song.track?.artists?.forEach(a => { if (a && a.id) { artist_ids.add(a.id) } })
 					if (song.track?.album && song.track.album.id) { album_ids.add(song.track.album.id) }
@@ -680,32 +749,20 @@ let PlaylistExporter = {
 
 		// Make queries on all the artists, because this json is where genre information lives. Unfortunately this
 		// means a second wave of traffic, 50 artists at a time the maximum allowed.
-		let genre_promise = data_promise.then(() => {
-			artist_ids = Array.from(artist_ids) // Make groups of 50 artists, to all be queried together
-			let artist_chunks = []; while (artist_ids.length) { artist_chunks.push(artist_ids.splice(0, 50)) }
-			let artists_promises = artist_chunks.map((chunk_ids, i) => utils.apiCall(
-				'https://api.spotify.com/v1/artists?ids='+chunk_ids.join(','), 100*i)) // volley of traffic, requests staggered by 100ms
-			return Promise.all(artists_promises).then(responses => {
+		let genre_promise = data_promise.then(() =>
+			this.fetchByIds('artists', Array.from(artist_ids), 50, 100).then(artists => {
 				let artist_genres = {} // build a dictionary, rather than a table
-				responses.forEach(response => response.artists.forEach(
-					artist => { if (artist) {artist_genres[artist.id] = artist.genres.join(',')} } )) // these are the artists who had ids before, but it's still possible they aren't in the genre database
+				artists.forEach(artist => { if (artist) {artist_genres[artist.id] = (artist.genres || []).join(',')} }) // these are the artists who had ids before, but it's still possible they aren't in the genre database
 				return artist_genres
-			})
-		})
+			}))
 
 		// Fetch album details, another wave of traffic, 20 albums at a time max. Happens after genre_promise has finished, to build in delay.
-		let album_promise = Promise.all([data_promise, genre_promise]).then(() => {
-			album_ids = Array.from(album_ids) // chunk set of ids into 20s
-			let album_chunks = []; while (album_ids.length) { album_chunks.push(album_ids.splice(0, 20)) }
-			let album_promises = album_chunks.map((chunk_ids, i) => utils.apiCall(
-				'https://api.spotify.com/v1/albums?ids=' + chunk_ids.join(','), 120*i))
-			return Promise.all(album_promises).then(responses => {
+		let album_promise = Promise.all([data_promise, genre_promise]).then(() =>
+			this.fetchByIds('albums', Array.from(album_ids), 20, 120).then(albums => {
 				let record_labels = {} // analogous to genres
-				responses.forEach(response => response.albums.forEach(
-					album => { if (album) { record_labels[album.id] = album.label } } ))
+				albums.forEach(album => { if (album) { record_labels[album.id] = album.label ?? '' } })
 				return record_labels
-			})
-		})
+			}))
 
 		// Make queries for song audio features, 100 songs at a time.
 		let features_promise = Promise.all([data_promise, genre_promise, album_promise]).then(values => {
@@ -804,7 +861,7 @@ let PlaylistExporter = {
 				row.push('"'+Array.from(deduplicated_genres).filter(x => x != "").join(",")+'"') // remove empty strings
 				// add album details
 				let album_id = row.shift()
-				row.push('"'+record_labels[album_id]+'"')
+				row.push('"'+(record_labels[album_id] ?? '')+'"')
 				
 				// add features - MUST be done after shift() operations to maintain correct index
 				if (!features || features.length === 0) {
@@ -1316,7 +1373,7 @@ let PlaylistExporter = {
 <body>
 	<div style="max-width: 1400px; margin: 0 auto; padding: 0 var(--space-xl);">
 		<div class="header">
-			<img src="${coverArtUrl}" alt="Playlist Cover" class="playlist-cover" onerror="this.src='https://placehold.co/300x300?text=No+Image'" />
+			<img src="${coverArtUrl}" alt="Playlist Cover" class="playlist-cover" onerror="this.onerror=null; this.src='https://placehold.co/300x300?text=No+Image'" />
 			<div class="header-content">
 				<div class="simple-badge">Simple Analysis</div>
 				<h1>${escapeHtml(playlist.name)}</h1>
@@ -4143,18 +4200,33 @@ let PlaylistExporter = {
 
 // runs when the page loads
 onload = async () => {
-	let code = new URLSearchParams(location.search).get('code') // try to snag a code out of the url, in case this is after authorize()
-	if (code) {
+	const params = new URLSearchParams(location.search)
+	let code = params.get('code') // try to snag a code out of the url, in case this is after authorize()
+	const authError = params.get('error') // Spotify sends ?error=... if the user cancelled or the app config is wrong
+	if (code || authError) {
 		// Get rid of the ugly code string from the browser bar, maintaining subdirectory path
-		let cleanPath = location.pathname.split('?')[0].split('#')[0]; // Remove query and hash
-		history.replaceState({}, '', cleanPath) // Maintain subdirectory path
-
-		// Get full redirect URI including path (for GitHub Pages subdirectory support)
-		let redirectUri = location.origin + location.pathname.replace(/\/$/, ''); // Remove trailing slash
-		let response = await fetch("https://accounts.spotify.com/api/token", { method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-			body: new URLSearchParams({client_id: "d07d8c2ddb3646d4b4fb3781ffc6d2bc", grant_type: 'authorization_code', code: code, redirect_uri: redirectUri,
-				code_verifier: localStorage.getItem('code_verifier')}) }) // POST to get the access token, then fish it out of the response body
-		const tokenData = await response.json()
+		history.replaceState({}, '', location.pathname)
+	}
+	if (authError) {
+		utils.showError('<p><strong>Spotify sign-in didn\'t complete</strong> (' + PlaylistExporter.escapeHtml(authError) + ').</p>' +
+			(authError === 'access_denied' ? '<p>You cancelled the request. Click Sign In with Spotify to try again.</p>' : ''))
+	} else if (code) {
+		const codeVerifier = localStorage.getItem('code_verifier')
+		let tokenData = {}
+		try {
+			if (!codeVerifier) throw new Error('This sign-in was started in a different browser or tab. Please click Sign In with Spotify again.')
+			let response = await fetch("https://accounts.spotify.com/api/token", { method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+				body: new URLSearchParams({client_id: "d07d8c2ddb3646d4b4fb3781ffc6d2bc", grant_type: 'authorization_code', code: code,
+					redirect_uri: utils.redirectUri(), code_verifier: codeVerifier}) }) // POST to get the access token, then fish it out of the response body
+			tokenData = await response.json()
+			if (!tokenData.access_token) throw new Error(tokenData.error_description || tokenData.error || ('HTTP ' + response.status))
+		} catch (e) {
+			console.error('Token exchange failed:', e)
+			utils.showError('<p><strong>Spotify sign-in failed:</strong> ' + PlaylistExporter.escapeHtml(e.message) + '</p>' +
+				'<p>If this keeps happening, check that <code>' + PlaylistExporter.escapeHtml(utils.redirectUri()) + '</code> is listed ' +
+				'exactly as a Redirect URI for this app in the Spotify Developer Dashboard.</p>')
+		}
+		localStorage.removeItem('code_verifier')
 		if (tokenData.access_token) {
 			localStorage.setItem('access_token', tokenData.access_token)
 			localStorage.setItem('access_token_timestamp', Date.now())
@@ -4164,17 +4236,23 @@ onload = async () => {
 		}
 	}
 	if (localStorage.getItem('access_token') && utils.isAccessTokenFresh()) {
-		if (loginButton) loginButton.style.display = 'none' // When logged in, make the login button invisible
-		if (logoutContainer) logoutContainer.innerHTML = '<button id="logoutButton" class="logout-btn btn" onclick="utils.logout()">Log Out</button>' // Add a logout button by modifying the HTML
-		ReactDOM.render(React.createElement(PlaylistTable), playlistsContainer) // Create table and put it in the playlistsContainer	
+		showSignedIn()
 	} else if (localStorage.getItem('refresh_token')) {
 		try {
 			await utils.getValidAccessToken()
-			if (loginButton) loginButton.style.display = 'none'
-			if (logoutContainer) logoutContainer.innerHTML = '<button id="logoutButton" class="logout-btn btn" onclick="utils.logout()">Log Out</button>'
-			ReactDOM.render(React.createElement(PlaylistTable), playlistsContainer)
+			showSignedIn()
 		} catch (e) {
 			console.error('Failed to refresh access token on page load:', e)
 		}
 	}
+	// Coming back from Spotify lands at the top of the page; take the user to where their playlists will appear.
+	const playlistSection = document.getElementById('playlist-metadata')
+	if ((code || authError) && playlistSection) playlistSection.scrollIntoView()
+}
+
+function showSignedIn() {
+	document.body.classList.add('signed-in')
+	if (loginButton) loginButton.style.display = 'none' // When logged in, make the login button invisible
+	if (logoutContainer) logoutContainer.innerHTML = '<button id="logoutButton" class="logout-btn btn" onclick="utils.logout()">Log Out</button>' // Add a logout button by modifying the HTML
+	ReactDOM.render(React.createElement(PlaylistTable), playlistsContainer) // Create table and put it in the playlistsContainer
 }

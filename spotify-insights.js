@@ -7,6 +7,7 @@
 
 	var SESSION_GAP_MS = 30 * 60 * 1000;
 	var WARMUP_DAYS = 30;
+	var OBSESSION_MIN_MS = 30 * 1000; // same threshold spotify-data.js uses for "short play"
 	var DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 	var MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -546,8 +547,10 @@
 	}
 
 	function computeObsessions(records, tzMode) {
+		// Only count real listens: Spotify logs many 0–few-second "plays" (instant skips, queue churn), which
+		// otherwise inflate repeat streaks and per-day counts.
 		var music = records.filter(function (r) {
-			return r.content_type === 'music' && r.date;
+			return r.content_type === 'music' && r.date && r.ms_played >= OBSESSION_MIN_MS;
 		}).sort(function (a, b) { return a.date.getTime() - b.date.getTime(); });
 
 		var maxRun = 0;
