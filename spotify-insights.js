@@ -387,6 +387,17 @@
 			if (key) map[a].tracks[key] = true;
 		}
 
+		// "Loyal" means sticking with an artist across most of the history. A fixed 300-day bar can never be met by
+		// exports shorter than that, so scale it to the period covered (capped at 300 days for long histories) and
+		// skip the idea entirely when there's too little history for it to mean anything.
+		var dataFirst = null, dataLast = null;
+		Object.values(map).forEach(function (v) {
+			if (v.first && (!dataFirst || v.first < dataFirst)) dataFirst = v.first;
+			if (v.last && (!dataLast || v.last > dataLast)) dataLast = v.last;
+		});
+		var dataSpan = (dataFirst && dataLast) ? daysBetween(dataFirst, dataLast) : 0;
+		var loyalSpan = dataSpan >= 90 ? Math.min(300, Math.round(dataSpan * 0.75)) : Infinity;
+
 		var list = Object.values(map).map(function (v) {
 			var span = (v.first && v.last) ? daysBetween(v.first, v.last) : 0;
 			return {
@@ -398,13 +409,15 @@
 				first: v.first,
 				last: v.last,
 				kind: (span <= 30 && v.plays >= 20) ? 'fling'
-					: (span > 300 && v.plays >= 30) ? 'loyal'
+					: (span >= loyalSpan && v.plays >= 30) ? 'loyal'
 					: 'regular'
 			};
 		}).sort(function (a, b) { return b.minutes - a.minutes; });
 
-		var flings = list.filter(function (a) { return a.kind === 'fling'; }).slice(0, 10);
-		var loyal = list.filter(function (a) { return a.kind === 'loyal'; }).slice(0, 10);
+		var allFlings = list.filter(function (a) { return a.kind === 'fling'; });
+		var allLoyal = list.filter(function (a) { return a.kind === 'loyal'; });
+		var flings = allFlings.slice(0, 10);
+		var loyal = allLoyal.slice(0, 10);
 		var deepest = list.filter(function (a) { return a.plays >= 20; })
 			.sort(function (a, b) { return b.trackCount - a.trackCount; }).slice(0, 10);
 		var oneTrack = list.filter(function (a) { return a.plays >= 10 && a.trackCount === 1; })
@@ -412,8 +425,9 @@
 
 		var takeaway = list.length
 			? 'Top companion: ' + list[0].name + ' (' + Math.round(list[0].minutes) + ' min across ' +
-				list[0].span + ' days) · ' + flings.length + ' intense flings · ' +
-				loyal.length + ' year-long loyalties'
+				list[0].span + ' days) · ' + allFlings.length + ' intense flings' +
+				(loyalSpan === Infinity ? ''
+					: ' · ' + allLoyal.length + (dataSpan >= 365 ? ' year-long loyalties' : ' long-term loyalties (' + loyalSpan + '+ days)'))
 			: 'Not enough artist data.';
 
 		return {
@@ -422,6 +436,7 @@
 			top20: list.slice(0, 20),
 			flings: flings,
 			loyal: loyal,
+			loyalSpan: loyalSpan,
 			deepest: deepest,
 			oneTrack: oneTrack
 		};
@@ -1157,17 +1172,20 @@
 		if (platEl && typeof ApexCharts !== 'undefined' && data.skipPlatforms) {
 			var plats = data.skipPlatforms;
 			var chart2 = new ApexCharts(platEl, Object.assign({}, baseOpts(), {
-				chart: Object.assign({}, baseOpts().chart, { type: 'bar', height: 280 }),
+				// Horizontal so device names read in full instead of being rotated and clipped
+				chart: Object.assign({}, baseOpts().chart, { type: 'bar', height: Math.max(280, plats.length * 40) }),
+				plotOptions: { bar: { horizontal: true, borderRadius: 4 } },
 				series: [{
 					name: 'Skip rate',
 					data: plats.map(function (p) { return round1(p.skipRate * 100); })
 				}],
-				xaxis: { categories: plats.map(function (p) { return p.name; }) },
-				yaxis: {
+				xaxis: {
+					categories: plats.map(function (p) { return p.name; }),
 					max: 100,
 					title: { text: 'Skip %' },
 					labels: { formatter: function (v) { return Math.round(v) + '%'; } }
 				},
+				yaxis: { labels: { maxWidth: 220 } },
 				colors: [COLORS.magenta],
 				dataLabels: {
 					enabled: true,

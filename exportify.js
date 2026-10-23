@@ -962,8 +962,11 @@ let PlaylistExporter = {
 		const totalDuration = processedData.reduce((sum, t) => sum + t.duration, 0);
 		const explicitCount = processedData.filter(t => t.explicit).length;
 		
+		// Artist Name(s) holds every credited artist separated by ';', so split it (as Advanced Analysis does)
+		const splitArtists = artistStr => (artistStr || '').split(';').map(a => a.trim()).filter(a => a);
+
 		// Count unique artists, albums, genres
-		const uniqueArtists = new Set(processedData.map(t => t.artist).filter(a => a));
+		const uniqueArtists = new Set(processedData.flatMap(t => splitArtists(t.artist)));
 		const uniqueAlbums = new Set(processedData.map(t => t.album).filter(a => a));
 		const uniqueGenresSet = new Set();
 		processedData.forEach(track => {
@@ -986,7 +989,7 @@ let PlaylistExporter = {
 		// Artist analysis
 		const artistCount = {};
 		processedData.forEach(track => {
-			if (track.artist) artistCount[track.artist] = (artistCount[track.artist] || 0) + 1;
+			splitArtists(track.artist).forEach(artist => { artistCount[artist] = (artistCount[artist] || 0) + 1; });
 		});
 		const topArtists = Object.entries(artistCount)
 			.sort((a, b) => b[1] - a[1])
@@ -3722,7 +3725,10 @@ let PlaylistExporter = {
 			} else {
 				const uniqueArtistsForChart = Object.keys(artistCounts).length;
 				const mostTracksByArtist = uniqueArtistsForChart > 0 ? Math.max(...Object.values(artistCounts)) : 0;
-				const diversityMetric = (uniqueArtistsForChart / processedData.length * 100).toFixed(1);
+				// Unique artists per artist credit (not per track, since one track can credit several artists):
+				// 100% means no artist appears twice, lower means listening concentrates on repeat artists.
+				const totalArtistCredits = Object.values(artistCounts).reduce((sum, n) => sum + n, 0);
+				const diversityMetric = (totalArtistCredits > 0 ? uniqueArtistsForChart / totalArtistCredits * 100 : 0).toFixed(1);
 
 				artistDiversityContainer.innerHTML = 
 					'<div class="stat-cards">' +
@@ -3736,7 +3742,7 @@ let PlaylistExporter = {
 						'</div>' +
 						'<div class="stat-card">' +
 							'<div class="stat-card-value">' + diversityMetric + '%</div>' +
-							'<div class="stat-card-label">Diversity Ratio</div>' +
+							'<div class="stat-card-label" title="Unique artists ÷ total artist credits. 100% means no artist repeats.">Diversity Ratio</div>' +
 						'</div>' +
 					'</div>';
 			}

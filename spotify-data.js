@@ -145,6 +145,40 @@
 
 	// ---------- parse / normalize ----------
 
+	// Spotify's raw platform strings embed OS builds and hardware ids, e.g.
+	// "Android-tablet OS 7.1.1 API 25 (OnePlus, ONEPLUS A3003)" or "iOS 16.1 (iPhone14,2)". Reduce them to a
+	// readable device label; OS upgrades on the same device collapse into one entry.
+	function friendlyPlatform(raw) {
+		const s = String(raw || '').trim();
+		const l = s.toLowerCase();
+		if (!s || l === 'unknown') return 'Unknown';
+		const device = (s.match(/\(([^)]*)\)/) || [])[1] || '';
+
+		if (l.startsWith('android')) {
+			const kind = l.includes('tablet') ? 'Android tablet' : 'Android';
+			const parts = device.split(',').map(function (x) { return x.trim(); }).filter(Boolean);
+			if (parts.length < 2) return kind;
+			const brand = parts[0].charAt(0).toUpperCase() + parts[0].slice(1);
+			let model = parts[parts.length - 1];
+			if (model.toUpperCase().startsWith(brand.toUpperCase())) model = model.slice(brand.length).trim();
+			return kind + ' · ' + (brand + ' ' + model).trim();
+		}
+		if (l.startsWith('ios') || l.includes('iphone') || l.includes('ipad')) {
+			const hw = /ipad/i.test(s) ? 'iPad' : /iphone/i.test(s) ? 'iPhone' : '';
+			return hw ? 'iOS · ' + hw : 'iOS';
+		}
+		if (/^(os x|osx|mac ?os)/.test(l)) return 'macOS';
+		if (l.startsWith('windows')) return 'Windows';
+		if (l.startsWith('linux')) return 'Linux';
+		if (/web.?player/.test(l)) return 'Web player';
+		if (l.includes('cast')) return 'Chromecast';
+		if (l.startsWith('partner')) {
+			const name = s.replace(/^partner\s*/i, '').split(/[\s_]+/)[0] || 'device';
+			return 'Partner · ' + name.charAt(0).toUpperCase() + name.slice(1);
+		}
+		return s.length > 32 ? s.slice(0, 31) + '…' : s;
+	}
+
 	function normalizeRecord(raw, sourceFile) {
 		const ts = raw.ts || '';
 		const date = ts ? new Date(ts) : null;
@@ -177,7 +211,8 @@
 		return {
 			ts: ts,
 			date: date && !isNaN(date.getTime()) ? date : null,
-			platform: raw.platform || 'unknown',
+			platform: friendlyPlatform(raw.platform),
+			platform_raw: raw.platform || '',
 			ms_played: msPlayed,
 			played_minutes: msPlayed / 60000,
 			conn_country: raw.conn_country || '',
@@ -662,7 +697,7 @@
 				'<td><span class="play-type-badge play-type-' + escapeHtml(r.content_type) + '">' +
 					escapeHtml(r.content_type) + '</span></td>' +
 				'<td>' + escapeHtml(formatDuration(r.ms_played)) + '</td>' +
-				'<td>' + escapeHtml(r.platform) + '</td>' +
+				'<td title="' + escapeHtml(r.platform_raw) + '">' + escapeHtml(r.platform) + '</td>' +
 				'<td>' + (r.skipped ? 'Yes' : 'No') + '</td>' +
 				'</tr>';
 		}).join('');
@@ -886,14 +921,15 @@
 			const playVals = labels.map(function (k) { return stats.platforms[k].plays; });
 			const minVals = labels.map(function (k) { return stats.platforms[k].minutes; });
 			state.charts.platforms = new ApexCharts(platformEl, Object.assign({}, baseChartOptions(), {
-				chart: Object.assign({}, baseChartOptions().chart, { type: 'bar', height: 300 }),
+				// Horizontal so device names read in full instead of being rotated and clipped
+				chart: Object.assign({}, baseChartOptions().chart, { type: 'bar', height: Math.max(280, labels.length * 40) }),
+				plotOptions: { bar: { horizontal: true, borderRadius: 4 } },
 				series: [{ name: 'Plays', data: playVals }],
 				xaxis: {
 					categories: labels,
-					title: { text: 'Plays' },
-					labels: { rotate: -45 }
+					title: { text: 'Plays' }
 				},
-				yaxis: { title: { text: 'Plays' } },
+				yaxis: { labels: { maxWidth: 220 } },
 				colors: [CHART_COLORS.amber],
 				dataLabels: {
 					enabled: true,
@@ -967,6 +1003,7 @@
 				ms_played: r.ms_played,
 				minutes: Math.round(r.played_minutes * 1000) / 1000,
 				platform: r.platform,
+				platform_raw: r.platform_raw,
 				country: r.conn_country,
 				reason_start: r.reason_start,
 				reason_end: r.reason_end,
