@@ -1,0 +1,746 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Test Playlist - Simple Analysis | Nexporify</title>
+	<link rel="stylesheet" href="styles/artistic-theme.css">
+	<script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+	<style>
+		* {
+			margin: 0;
+			padding: 0;
+			box-sizing: border-box;
+		}
+		@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&display=swap');
+		:root {
+			--bg-primary: #0a0a0a;
+			--bg-secondary: #121212;
+			--bg-elevated: #1a1a1a;
+			--accent-primary: #1DB954;
+			--accent-blue: #00D4FF;
+			--accent-magenta: #FF00E5;
+			--text-primary: #FFFFFF;
+			--text-secondary: rgba(255, 255, 255, 0.7);
+			--text-tertiary: rgba(255, 255, 255, 0.5);
+			--space-xl: 40px;
+			--space-2xl: 60px;
+			--space-3xl: 80px;
+			--radius-sm: 8px;
+			--radius-md: 12px;
+			--radius-lg: 16px;
+		}
+		body {
+			font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+			background: var(--bg-primary);
+			background-image: linear-gradient(180deg, #0a0a0a 0%, #121212 50%, #1a1a1a 100%);
+			padding: 0;
+			color: var(--text-primary);
+			overflow-x: hidden;
+			-webkit-font-smoothing: antialiased;
+		}
+		body::before {
+			content: '';
+			position: fixed;
+			top: 0;
+			left: 0;
+			width: 100%;
+			height: 100%;
+			background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.03'/%3E%3C/svg%3E");
+			pointer-events: none;
+			z-index: 1;
+		}
+		.header {
+			background: linear-gradient(135deg, rgba(29, 185, 84, 0.2) 0%, rgba(0, 212, 255, 0.15) 100%);
+			backdrop-filter: blur(20px);
+			border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+			color: var(--text-primary);
+			padding: 80px 40px 60px;
+			text-align: center;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			gap: 40px;
+			position: relative;
+			overflow: hidden;
+		}
+		.header::before {
+			content: '';
+			position: absolute;
+			width: 500px;
+			height: 500px;
+			background: radial-gradient(circle, rgba(29, 185, 84, 0.1) 0%, transparent 70%);
+			top: -250px;
+			right: -250px;
+			border-radius: 50%;
+			filter: blur(60px);
+		}
+		.playlist-cover {
+			width: 280px;
+			height: 280px;
+			border-radius: 20px;
+			box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6), 0 0 40px rgba(29, 185, 84, 0.3);
+			object-fit: cover;
+			transition: transform 0.5s ease, box-shadow 0.5s ease;
+		}
+		.playlist-cover:hover {
+			transform: scale(1.05);
+			box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8), 0 0 60px rgba(29, 185, 84, 0.5);
+		}
+		.header-content {
+			flex: 1;
+			position: relative;
+			z-index: 2;
+			text-align: left;
+		}
+		.header h1 {
+			font-size: clamp(32px, 5vw, 64px);
+			font-weight: 900;
+			margin-bottom: 10px;
+			letter-spacing: -0.03em;
+			background: linear-gradient(135deg, #1DB954 0%, #00D4FF 100%);
+			-webkit-background-clip: text;
+			-webkit-text-fill-color: transparent;
+			background-clip: text;
+		}
+		.header p {
+			opacity: 0.8;
+			font-size: 18px;
+			color: var(--text-secondary);
+			font-weight: 500;
+		}
+		.simple-badge {
+			display: inline-block;
+			padding: 8px 16px;
+			background: linear-gradient(135deg, #1DB954 0%, #00D4FF 100%);
+			border-radius: 50px;
+			font-size: 11px;
+			font-weight: 700;
+			text-transform: uppercase;
+			letter-spacing: 0.05em;
+			margin-bottom: 16px;
+		}
+		.info-note {
+			background: rgba(0, 212, 255, 0.1);
+			border-left: 3px solid var(--accent-blue);
+			padding: 20px;
+			border-radius: var(--radius-md);
+			margin: 40px 0;
+			font-size: 14px;
+			line-height: 1.6;
+		}
+		.info-note a {
+			color: var(--accent-blue);
+			text-decoration: none;
+			font-weight: 600;
+		}
+		.info-note a:hover {
+			text-decoration: underline;
+		}
+		.summary-section {
+			padding: 60px 40px;
+			background: transparent;
+		}
+		.stat-cards {
+			display: grid;
+			grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+			gap: 15px;
+			margin-bottom: 30px;
+		}
+		.stat-card {
+			background: var(--bg-elevated);
+			border-radius: 16px;
+			padding: 30px;
+			box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+			border: 1px solid rgba(255, 255, 255, 0.05);
+			text-align: center;
+			transition: transform 0.3s ease, box-shadow 0.3s ease;
+			position: relative;
+			overflow: hidden;
+		}
+		.stat-card::before {
+			content: '';
+			position: absolute;
+			top: 0;
+			left: 0;
+			width: 100%;
+			height: 100%;
+			background: linear-gradient(135deg, rgba(29, 185, 84, 0.1) 0%, rgba(0, 212, 255, 0.1) 100%);
+			opacity: 0;
+			transition: opacity 0.3s ease;
+		}
+		.stat-card:hover {
+			transform: translateY(-4px);
+			box-shadow: 0 12px 48px rgba(0, 0, 0, 0.5), 0 0 30px rgba(29, 185, 84, 0.3);
+		}
+		.stat-card:hover::before {
+			opacity: 1;
+		}
+		.stat-card-value {
+			font-size: clamp(32px, 4vw, 48px);
+			font-weight: 900;
+			background: linear-gradient(135deg, #1DB954 0%, #00D4FF 100%);
+			-webkit-background-clip: text;
+			-webkit-text-fill-color: transparent;
+			background-clip: text;
+			margin-bottom: 8px;
+			position: relative;
+			z-index: 1;
+		}
+		.stat-card-label {
+			font-size: 12px;
+			color: var(--text-tertiary);
+			text-transform: uppercase;
+			letter-spacing: 0.1em;
+			font-weight: 600;
+			position: relative;
+			z-index: 1;
+		}
+		.viz-section {
+			margin-bottom: 120px;
+			opacity: 0;
+			transform: translateY(30px);
+			transition: opacity 0.8s ease, transform 0.8s ease;
+		}
+		.viz-section.visible {
+			opacity: 1;
+			transform: translateY(0);
+		}
+		.section-header {
+			font-size: clamp(28px, 4vw, 48px);
+			font-weight: 900;
+			color: var(--text-primary);
+			margin-bottom: 60px;
+			padding-bottom: 20px;
+			border-bottom: 2px solid var(--accent-primary);
+			display: flex;
+			align-items: center;
+			gap: 20px;
+			letter-spacing: -0.02em;
+			position: relative;
+		}
+		.section-header::after {
+			content: '';
+			position: absolute;
+			bottom: -2px;
+			left: 0;
+			width: 100px;
+			height: 2px;
+			background: linear-gradient(90deg, var(--accent-primary), transparent);
+		}
+		.chart-grid {
+			display: grid;
+			grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+			gap: 25px;
+			margin-bottom: 30px;
+		}
+		.chart-container {
+			background: var(--bg-elevated);
+			border-radius: 20px;
+			padding: 30px;
+			box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+			border: 1px solid rgba(255, 255, 255, 0.05);
+			transition: transform 0.3s ease, box-shadow 0.3s ease;
+			position: relative;
+			overflow: hidden;
+		}
+		.chart-container::before {
+			content: '';
+			position: absolute;
+			top: 0;
+			left: 0;
+			width: 100%;
+			height: 100%;
+			background: linear-gradient(135deg, rgba(29, 185, 84, 0.05) 0%, rgba(0, 212, 255, 0.05) 100%);
+			opacity: 0;
+			transition: opacity 0.3s ease;
+			pointer-events: none;
+		}
+		.chart-container:hover {
+			transform: translateY(-4px);
+			box-shadow: 0 12px 48px rgba(0, 0, 0, 0.5), 0 0 30px rgba(29, 185, 84, 0.2);
+		}
+		.chart-container:hover::before {
+			opacity: 1;
+		}
+		.chart-title {
+			font-size: 18px;
+			font-weight: 700;
+			margin-bottom: 20px;
+			color: var(--text-primary);
+			letter-spacing: -0.01em;
+		}
+		.chart-wrapper {
+			min-height: 300px;
+		}
+		.track-list {
+			background: var(--bg-elevated);
+			border-radius: 20px;
+			padding: 30px;
+			box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+			border: 1px solid rgba(255, 255, 255, 0.05);
+		}
+		.track-list-title {
+			font-size: 18px;
+			font-weight: 700;
+			margin-bottom: 20px;
+			color: var(--text-primary);
+			letter-spacing: -0.01em;
+			padding-bottom: 15px;
+			border-bottom: 2px solid var(--accent-primary);
+		}
+		.track-list-item {
+			padding: 16px;
+			border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+			display: flex;
+			justify-content: space-between;
+			align-items: center;
+			transition: background 0.2s ease, transform 0.2s ease;
+			border-radius: 8px;
+			margin-bottom: 4px;
+		}
+		.track-list-item:last-child {
+			border-bottom: none;
+			margin-bottom: 0;
+		}
+		.track-list-item:hover {
+			background: rgba(29, 185, 84, 0.1);
+			transform: translateX(4px);
+		}
+		.lists-container {
+			display: grid;
+			grid-template-columns: 1fr 1fr;
+			gap: 25px;
+		}
+		@media (max-width: 768px) {
+			.header {
+				flex-direction: column;
+				padding: 60px 20px 40px;
+				gap: 30px;
+			}
+			.playlist-cover {
+				width: 200px;
+				height: 200px;
+			}
+			.header h1 {
+				font-size: 36px;
+			}
+			.chart-grid {
+				grid-template-columns: 1fr;
+				gap: 30px;
+			}
+			.viz-section {
+				padding: 60px 20px;
+			}
+			.summary-section {
+				padding: 40px 20px;
+			}
+			.lists-container {
+				grid-template-columns: 1fr;
+			}
+			.stat-cards {
+				grid-template-columns: repeat(2, 1fr);
+				gap: 15px;
+			}
+		}
+	</style>
+</head>
+<body>
+	<div style="max-width: 1400px; margin: 0 auto; padding: 0 var(--space-xl); position: relative; z-index: 2;">
+		<div class="header">
+			<img src="https://placehold.co/300x300/1DB954/FFFFFF?text=Test+Playlist" alt="Playlist Cover" class="playlist-cover" />
+			<div class="header-content">
+				<div class="simple-badge">Simple Analysis</div>
+				<h1>My Test Playlist</h1>
+			</div>
+		</div>
+		
+		<div class="info-note">
+			<strong>ℹ️ Simple Analysis Mode:</strong> This shows basic playlist data without audio features (danceability, energy, tempo, etc.). 
+			For complete analysis with all audio characteristics, export from <a href="https://exportify.net" target="_blank">exportify.net</a> and upload the CSV.
+		</div>
+		
+		<div class="summary-section" style="padding: 40px 0;">
+			<div class="stat-cards">
+				<div class="stat-card">
+					<div class="stat-card-value">50</div>
+					<div class="stat-card-label">Total Tracks</div>
+				</div>
+				<div class="stat-card">
+					<div class="stat-card-value">25</div>
+					<div class="stat-card-label">Artists</div>
+				</div>
+				<div class="stat-card">
+					<div class="stat-card-value">35</div>
+					<div class="stat-card-label">Albums</div>
+				</div>
+				<div class="stat-card">
+					<div class="stat-card-value">12</div>
+					<div class="stat-card-label">Genres</div>
+				</div>
+				<div class="stat-card">
+					<div class="stat-card-value">72</div>
+					<div class="stat-card-label">Avg Popularity</div>
+				</div>
+				<div class="stat-card">
+					<div class="stat-card-value">180 min</div>
+					<div class="stat-card-label">Total Duration</div>
+				</div>
+			</div>
+		</div>
+		
+		<div class="visualizations" style="padding: 60px 40px;">
+			<section id="top-songs" class="viz-section">
+				<h2 class="section-header">Top 10 by Song Count</h2>
+				<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 25px;">
+					<div class="track-list">
+						<div class="track-list-title">Top 10 Artists</div>
+						<div id="topArtistsList"></div>
+					</div>
+					<div class="track-list">
+						<div class="track-list-title">Top 10 Genres</div>
+						<div id="topGenresList"></div>
+					</div>
+					<div class="track-list">
+						<div class="track-list-title">Top 10 Albums</div>
+						<div id="topAlbumsList"></div>
+					</div>
+					<div class="track-list">
+						<div class="track-list-title">Top 10 Labels</div>
+						<div id="topLabelsList"></div>
+					</div>
+				</div>
+			</section>
+			
+			<section id="artist-genre" class="viz-section">
+				<h2 class="section-header">Artist & Genre Insights</h2>
+				<div class="chart-grid">
+					<div class="chart-container">
+						<div class="chart-title">Genre Distribution</div>
+						<div id="genreChart" class="chart-wrapper"></div>
+					</div>
+					<div class="chart-container">
+						<div class="chart-title">Top Artists</div>
+						<div id="artistChart" class="chart-wrapper"></div>
+					</div>
+				</div>
+			</section>
+			
+			<section id="playlist-characteristics" class="viz-section">
+				<h2 class="section-header">Playlist Characteristics</h2>
+				<div class="chart-grid">
+					<div class="chart-container">
+						<div class="chart-title">Popularity Distribution</div>
+						<div id="popularityChart" class="chart-wrapper"></div>
+					</div>
+					<div class="chart-container">
+						<div class="chart-title">Duration Distribution</div>
+						<div id="durationChart" class="chart-wrapper"></div>
+					</div>
+					<div class="chart-container">
+						<div class="chart-title">Explicit Content</div>
+						<div id="explicitChart" class="chart-wrapper"></div>
+					</div>
+				</div>
+			</section>
+			
+			<section id="temporal-analysis" class="viz-section">
+				<h2 class="section-header">Temporal Analysis</h2>
+				<div class="chart-grid">
+					<div class="chart-container">
+						<div class="chart-title">Release Year Distribution</div>
+						<div id="yearChart" class="chart-wrapper"></div>
+					</div>
+					<div class="chart-container">
+						<div class="chart-title">Decade Breakdown</div>
+						<div id="decadeChart" class="chart-wrapper"></div>
+					</div>
+				</div>
+			</section>
+			
+			<section id="track-data" class="viz-section">
+				<h2 class="section-header">Complete Track Data</h2>
+				<div id="trackTable"></div>
+			</section>
+		</div>
+	</div>
+	
+	<script>
+		// Sample data for testing
+		const topGenres = [
+			['Pop', 15],
+			['Rock', 12],
+			['Hip Hop', 8],
+			['Electronic', 7],
+			['R&B', 5],
+			['Indie', 3]
+		];
+		
+		const topArtists = [
+			['The Weeknd', 5],
+			['Drake', 4],
+			['Taylor Swift', 3],
+			['Billie Eilish', 3],
+			['Post Malone', 2],
+			['Ariana Grande', 2],
+			['Ed Sheeran', 2],
+			['Dua Lipa', 2],
+			['Travis Scott', 1],
+			['Harry Styles', 1]
+		];
+		
+		const topAlbums = [
+			['After Hours', 5],
+			['Certified Lover Boy', 4],
+			['Midnights', 3],
+			['Happier Than Ever', 3],
+			['Hollywood\'s Bleeding', 2],
+			['Positions', 2],
+			['Divide', 2],
+			['Future Nostalgia', 2],
+			['Astroworld', 1],
+			['Harry\'s House', 1]
+		];
+		
+		const topLabels = [
+			['Republic Records', 12],
+			['Columbia Records', 8],
+			['Atlantic Records', 7],
+			['Interscope Records', 6],
+			['RCA Records', 5],
+			['Warner Records', 4],
+			['Capitol Records', 3],
+			['Epic Records', 2],
+			['Def Jam', 2],
+			['Universal Records', 1]
+		];
+		
+		const yearData = [
+			['2018', 5],
+			['2019', 8],
+			['2020', 12],
+			['2021', 15],
+			['2022', 7],
+			['2023', 3]
+		];
+		
+		const processedData = Array.from({length: 50}, (_, i) => ({
+			trackName: `Track ${i + 1}`,
+			artist: topArtists[i % topArtists.length][0],
+			album: `Album ${i % 10 + 1}`,
+			releaseDate: `202${i % 4}-0${(i % 12) + 1}-01`,
+			popularity: 50 + Math.floor(Math.random() * 50),
+			duration: 180000 + Math.floor(Math.random() * 120000),
+			explicit: i % 4 === 0
+		}));
+		
+		// Scroll animations
+		const observerOptions = {
+			threshold: 0.1,
+			rootMargin: '0px 0px -100px 0px'
+		};
+		
+		const observer = new IntersectionObserver((entries) => {
+			entries.forEach(entry => {
+				if (entry.isIntersecting) {
+					entry.target.classList.add('visible');
+				}
+			});
+		}, observerOptions);
+		
+		document.querySelectorAll('.viz-section').forEach(section => {
+			observer.observe(section);
+		});
+		
+		// Top Artists List
+		const topArtistsList = document.getElementById('topArtistsList');
+		if (topArtistsList) {
+			topArtistsList.innerHTML = topArtists.map(([artist, count], i) => 
+				'<div class="track-list-item"><span>' + (i + 1) + '. ' + artist + '</span><span>' + count + ' tracks</span></div>'
+			).join('');
+		}
+		
+		// Top Genres List
+		const topGenresList = document.getElementById('topGenresList');
+		if (topGenresList) {
+			topGenresList.innerHTML = topGenres.map(([genre, count], i) => 
+				'<div class="track-list-item"><span>' + (i + 1) + '. ' + genre + '</span><span>' + count + ' tracks</span></div>'
+			).join('');
+		}
+		
+		// Top Albums List
+		const topAlbumsList = document.getElementById('topAlbumsList');
+		if (topAlbumsList) {
+			topAlbumsList.innerHTML = topAlbums.map(([album, count], i) => 
+				'<div class="track-list-item"><span>' + (i + 1) + '. ' + album + '</span><span>' + count + ' tracks</span></div>'
+			).join('');
+		}
+		
+		// Top Labels List
+		const topLabelsList = document.getElementById('topLabelsList');
+		if (topLabelsList) {
+			topLabelsList.innerHTML = topLabels.map(([label, count], i) => 
+				'<div class="track-list-item"><span>' + (i + 1) + '. ' + label + '</span><span>' + count + ' tracks</span></div>'
+			).join('');
+		}
+		
+		// Genre Chart
+		new ApexCharts(document.querySelector("#genreChart"), {
+			series: [{
+				data: topGenres.map(([genre, count]) => count)
+			}],
+			chart: { type: 'bar', height: 400, background: 'transparent', toolbar: { show: false } },
+			plotOptions: { bar: { horizontal: true, distributed: true } },
+			colors: ['#1DB954', '#1ed760', '#00d9ff', '#667eea', '#764ba2', '#f093fb'],
+			xaxis: { categories: topGenres.map(([genre]) => genre), labels: { style: { colors: '#FFFFFF' } } },
+			yaxis: { labels: { style: { colors: '#FFFFFF' } } },
+			tooltip: { theme: 'dark' },
+			legend: { show: false }
+		}).render();
+		
+		// Artist Chart
+		new ApexCharts(document.querySelector("#artistChart"), {
+			series: [{
+				data: topArtists.map(([artist, count]) => count)
+			}],
+			chart: { type: 'bar', height: 400, background: 'transparent', toolbar: { show: false } },
+			plotOptions: { bar: { horizontal: true, distributed: true } },
+			colors: ['#1DB954', '#1ed760', '#00d9ff', '#667eea', '#764ba2', '#f093fb', '#4facfe', '#00f2fe', '#43e97b', '#38f9d7'],
+			xaxis: { categories: topArtists.map(([artist]) => artist), labels: { style: { colors: '#FFFFFF' } } },
+			yaxis: { labels: { style: { colors: '#FFFFFF' } } },
+			tooltip: { theme: 'dark' },
+			legend: { show: false }
+		}).render();
+		
+		// Popularity Distribution
+		const popularityBuckets = { '0-20': 3, '21-40': 5, '41-60': 12, '61-80': 20, '81-100': 10 };
+		
+		new ApexCharts(document.querySelector("#popularityChart"), {
+			series: [{ name: 'Tracks', data: Object.values(popularityBuckets) }],
+			chart: { type: 'bar', height: 350, background: 'transparent', toolbar: { show: false } },
+			colors: ['#1DB954'],
+			xaxis: { categories: Object.keys(popularityBuckets), labels: { style: { colors: '#FFFFFF' } } },
+			yaxis: { labels: { style: { colors: '#FFFFFF' } } },
+			tooltip: { theme: 'dark' },
+			grid: { borderColor: 'rgba(255, 255, 255, 0.1)' },
+			plotOptions: { bar: { distributed: false, columnWidth: '70%' } }
+		}).render();
+		
+		// Duration Distribution
+		const durationBuckets = { '0-2 min': 2, '2-3 min': 8, '3-4 min': 25, '4-5 min': 10, '5+ min': 5 };
+		
+		new ApexCharts(document.querySelector("#durationChart"), {
+			series: [{ name: 'Tracks', data: Object.values(durationBuckets) }],
+			chart: { type: 'bar', height: 350, background: 'transparent', toolbar: { show: false } },
+			colors: ['#00D4FF'],
+			xaxis: { categories: Object.keys(durationBuckets), labels: { style: { colors: '#FFFFFF' } } },
+			yaxis: { labels: { style: { colors: '#FFFFFF' } } },
+			tooltip: { theme: 'dark' },
+			grid: { borderColor: 'rgba(255, 255, 255, 0.1)' },
+			plotOptions: { bar: { distributed: false, columnWidth: '70%' } }
+		}).render();
+		
+		// Explicit Content Chart
+		const explicitCount = 12;
+		const cleanCount = 38;
+		
+		new ApexCharts(document.querySelector("#explicitChart"), {
+			series: [explicitCount, cleanCount],
+			chart: { type: 'donut', height: 350, background: 'transparent' },
+			labels: ['Explicit', 'Clean'],
+			colors: ['#ff6b6b', '#1DB954'],
+			legend: { labels: { colors: '#FFFFFF' } },
+			tooltip: { theme: 'dark' },
+			plotOptions: {
+				pie: {
+					donut: {
+						labels: {
+							show: true,
+							total: {
+								show: true,
+								label: 'Total',
+								color: '#FFFFFF'
+							}
+						}
+					}
+				}
+			}
+		}).render();
+		
+		// Year Distribution (Histogram)
+		new ApexCharts(document.querySelector("#yearChart"), {
+			series: [{ name: 'Tracks', data: yearData.map(([year, count]) => count) }],
+			chart: { type: 'bar', height: 350, background: 'transparent', toolbar: { show: false } },
+			colors: ['#1DB954'],
+			xaxis: { categories: yearData.map(([year]) => year), labels: { style: { colors: '#FFFFFF' } } },
+			yaxis: { labels: { style: { colors: '#FFFFFF' } } },
+			tooltip: { theme: 'dark' },
+			grid: { borderColor: 'rgba(255, 255, 255, 0.1)' },
+			plotOptions: { bar: { distributed: false, columnWidth: '70%' } }
+		}).render();
+		
+		// Decade Breakdown
+		const decadeData = {
+			'1990s': 2,
+			'2000s': 5,
+			'2010s': 18,
+			'2020s': 25
+		};
+		
+		new ApexCharts(document.querySelector("#decadeChart"), {
+			series: Object.values(decadeData),
+			chart: { type: 'donut', height: 350, background: 'transparent' },
+			labels: Object.keys(decadeData),
+			colors: ['#764ba2', '#667eea', '#00d4ff', '#1DB954'],
+			legend: { labels: { colors: '#FFFFFF' } },
+			tooltip: { theme: 'dark' },
+			plotOptions: {
+				pie: {
+					donut: {
+						labels: {
+							show: true,
+							total: {
+								show: true,
+								label: 'Total',
+								color: '#FFFFFF'
+							}
+						}
+					}
+				}
+			}
+		}).render();
+		
+		// Track Table
+		const trackTable = document.getElementById('trackTable');
+		if (trackTable) {
+			let tableHTML = '<div style="overflow-x: auto;"><table style="width: 100%; border-collapse: collapse;">';
+			tableHTML += '<thead><tr style="border-bottom: 2px solid var(--accent-primary);">';
+			tableHTML += '<th style="padding: 16px; text-align: left; color: var(--text-primary); font-weight: 700; text-transform: uppercase; font-size: 12px; letter-spacing: 0.1em;">#</th>';
+			tableHTML += '<th style="padding: 16px; text-align: left; color: var(--text-primary); font-weight: 700; text-transform: uppercase; font-size: 12px; letter-spacing: 0.1em;">Track</th>';
+			tableHTML += '<th style="padding: 16px; text-align: left; color: var(--text-primary); font-weight: 700; text-transform: uppercase; font-size: 12px; letter-spacing: 0.1em;">Artist</th>';
+			tableHTML += '<th style="padding: 16px; text-align: left; color: var(--text-primary); font-weight: 700; text-transform: uppercase; font-size: 12px; letter-spacing: 0.1em;">Album</th>';
+			tableHTML += '<th style="padding: 16px; text-align: left; color: var(--text-primary); font-weight: 700; text-transform: uppercase; font-size: 12px; letter-spacing: 0.1em;">Release</th>';
+			tableHTML += '<th style="padding: 16px; text-align: left; color: var(--text-primary); font-weight: 700; text-transform: uppercase; font-size: 12px; letter-spacing: 0.1em;">Duration</th>';
+			tableHTML += '<th style="padding: 16px; text-align: left; color: var(--text-primary); font-weight: 700; text-transform: uppercase; font-size: 12px; letter-spacing: 0.1em;">Popularity</th>';
+			tableHTML += '</tr></thead><tbody>';
+			
+			processedData.forEach((track, i) => {
+				const duration = Math.floor(track.duration / 60000) + ':' + String(Math.floor((track.duration % 60000) / 1000)).padStart(2, '0');
+				tableHTML += '<tr style="border-bottom: 1px solid rgba(255, 255, 255, 0.05); transition: background 0.2s ease;" onmouseover="this.style.background=\'rgba(29, 185, 84, 0.1)\'" onmouseout="this.style.background=\'transparent\'">';
+				tableHTML += '<td style="padding: 14px; color: var(--text-tertiary);">' + (i + 1) + '</td>';
+				tableHTML += '<td style="padding: 14px; color: var(--text-primary); font-weight: 600;">' + track.trackName + '</td>';
+				tableHTML += '<td style="padding: 14px; color: var(--text-secondary);">' + track.artist + '</td>';
+				tableHTML += '<td style="padding: 14px; color: var(--text-secondary);">' + track.album + '</td>';
+				tableHTML += '<td style="padding: 14px; color: var(--text-secondary);">' + track.releaseDate + '</td>';
+				tableHTML += '<td style="padding: 14px; color: var(--text-secondary);">' + duration + '</td>';
+				tableHTML += '<td style="padding: 14px; color: var(--text-secondary);">' + track.popularity + '</td>';
+				tableHTML += '</tr>';
+			});
+			
+			tableHTML += '</tbody></table></div>';
+			trackTable.innerHTML = tableHTML;
+		}
+	</script>
+</body>
+</html>
+

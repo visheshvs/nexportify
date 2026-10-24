@@ -1,47 +1,269 @@
 <!doctype html>
 <html lang="en">
 <head>
-	<title>Exportify</title>
+	<title>Nexporify - Spotify Playlist Metadata & Listening History</title>
 	<meta charset="utf-8">
-	<meta name="description" content="Export and save your Spotify playlists to csv. Analyze your music tastes in the Jupyter notebook. Data fields include genres, artists, popularity, year and more.">
-	<link rel="icon" type="image/png" href="favicon.png">
-	<link rel="canonical" href="https://exportify.net">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<meta name="description" content="Two ways to explore your Spotify data: export and analyze playlist metadata (genres, artists, labels, audio features), or explore your Extended Streaming History in the browser.">
 
-	<script>let code = new URLSearchParams(location.search).get('code'); if (code) history.replaceState({}, '', '/')</script>
-	<!-- Bootstrap -->
-	<link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.3.4/css/bootstrap.min.css">
-	<link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/font-awesome/4.3.0/css/font-awesome.min.css">
+	<link rel="icon" type="image/png" href="favicon.png">
+
+	<!-- Google Fonts - Inter Variable -->
+	<link rel="preconnect" href="https://fonts.googleapis.com">
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&display=swap" rel="stylesheet">
+
 	<!-- React.js -->
 	<script src="//unpkg.com/react@16/umd/react.production.min.js"></script>
 	<script src="//unpkg.com/react-dom@16/umd/react-dom.production.min.js"></script>
+
 	<!-- IO utils -->
 	<script src="FileSaver.js"></script>
 	<script src="//cdnjs.cloudflare.com/ajax/libs/jszip/2.5.0/jszip.min.js"></script>
-	<!-- app itself -->
-	<link rel="stylesheet" href="style.css">
+
+	<!-- Styles -->
+	<link rel="stylesheet" href="styles/artistic-theme.css">
+
+	<!-- Scripts -->
 	<script src="exportify.js"></script>
 </head>
 
-<body>
-	<div class="container">
-		<div id="header">
-			<div id="logoutContainer" class="text-right"></div>
+<body class="home-page">
+	<!-- Abstract Background Shapes -->
+	<div class="abstract-shape shape-1"></div>
+	<div class="abstract-shape shape-2"></div>
+	<div class="abstract-shape shape-3"></div>
 
-			<h1><a href="https://github.com/pavelkomarov/exportify"><i class="fa fa-spotify" style="color: #65D36E"></i> Exportify</a></h1>
-			<p id="subtitle" class="lead">Export your Spotify playlist data.</p>
-			<p>Analyze the data <a href="http://pavelkomarov.com/exportify/taste_analysis">like this</a>
-				by <a href="https://mybinder.org/v2/gh/pavelkomarov/exportify/master" target="_blank">
-				launching the notebook</a>, uploading your <tt>.csv</tt>, and running the <tt>.ipynb</tt>.</p>
-			<p>What do you use your data to do? Have improvement ideas? Want to know how to use URIs? Join the <a href="https://github.com/pavelkomarov/exportify/discussions">discussion</a> on <a href="https://github.com/pavelkomarov/exportify">GitHub</a>!</p>
-			<p id="error"></p>
-
-			<button id="loginButton" type="submit" class="btn btn-lg" onclick="utils.authorize()">
-				<i class="fa fa-check-circle-o"></i> Get Started
-			</button>
+	<header class="main-header visible" id="mainHeader">
+		<div class="header-content">
+			<a href="./" class="logo">Nexporify</a>
+			<nav class="site-nav" aria-label="Features">
+				<a href="#playlist-metadata" class="site-nav-link">Playlist Metadata</a>
+				<a href="#listening-history" class="site-nav-link">Listening History</a>
+			</nav>
+			<div id="logoutContainer"></div>
 		</div>
+	</header>
 
-		<div id="playlistsContainer"></div>
+	<!-- Hero: introduces both features and lets the user pick a path -->
+	<section class="hero-section home-hero" id="heroSection">
+		<div class="hero-background"></div>
+		<div class="hero-content">
+			<h1 class="hero-title">Your Spotify,<br/>as Data</h1>
+			<p class="hero-subtitle">Two ways to explore your music: analyze what's in your playlists, or dig into what you've actually been listening to.</p>
 
-	</div><!-- /.container -->
+			<div class="path-cards">
+				<a href="#playlist-metadata" class="path-card path-card-playlists">
+					<span class="path-card-eyebrow">01 · Playlist Metadata</span>
+					<span class="path-card-title">Analyze your playlists</span>
+					<span class="path-card-text">Export any playlist to CSV and explore genres, artists, record labels, release years, popularity and audio features.</span>
+					<span class="path-card-tags"><span>Simple: sign in</span><span>Advanced: upload CSV</span></span>
+					<span class="path-card-cta">Start with a playlist <span aria-hidden="true">↓</span></span>
+				</a>
+				<a href="#listening-history" class="path-card path-card-history">
+					<span class="path-card-eyebrow">02 · Listening History</span>
+					<span class="path-card-title">Explore your listening history</span>
+					<span class="path-card-text">Load the Extended Streaming History from your Spotify data download and see your habits, skips, obsessions and taste over the years.</span>
+					<span class="path-card-tags"><span>Streaming history JSON</span><span>Stays in your browser</span></span>
+					<span class="path-card-cta">Explore listening data <span aria-hidden="true">↓</span></span>
+				</a>
+			</div>
+		</div>
+	</section>
+
+	<main>
+		<!-- Feature 1: Spotify playlist metadata -->
+		<section class="feature-section" id="playlist-metadata">
+			<header class="feature-header">
+				<p class="feature-eyebrow">Feature 01</p>
+				<h2 class="feature-title">Spotify Playlist Metadata</h2>
+				<p class="feature-lead">
+					Turn a playlist into a dataset: track details, artists, genres, record labels, release dates and popularity,
+					plus audio features such as danceability, energy, valence and tempo when they're available.
+					Pick the mode that fits.
+				</p>
+			</header>
+
+			<div class="mode-grid">
+				<article class="mode-card mode-simple">
+					<div class="mode-card-head">
+						<span class="mode-badge">Quick start</span>
+						<h3>Simple Analysis</h3>
+						<p class="mode-description">Sign in and analyze any of your playlists right away: genres, artists, labels, release years and popularity. No export needed.</p>
+					</div>
+					<ol class="hero-steps">
+						<li>Sign in with Spotify</li>
+						<li>Browse your playlists below</li>
+						<li>Click <strong>Analyze</strong> on a playlist, or <strong>Export</strong> to save its CSV</li>
+					</ol>
+					<div class="mode-action">
+						<button id="loginButton" type="button" class="btn btn-primary" onclick="utils.authorize()">
+							Sign In with Spotify
+						</button>
+						<p class="signed-in-note">You're signed in. Your playlists are listed below.</p>
+					</div>
+				</article>
+
+				<article class="mode-card mode-advanced">
+					<div class="mode-card-head">
+						<span class="mode-badge">Full data</span>
+						<h3>Advanced Analysis</h3>
+						<p class="mode-description">Every audio feature, including mood quadrant, tempo, key and energy, from a CSV exported with <a href="https://exportify.net" target="_blank" rel="noopener">exportify.net</a>.</p>
+					</div>
+					<ol class="hero-steps">
+						<li>Go to <a href="https://exportify.net" target="_blank" rel="noopener">exportify.net</a> and sign in</li>
+						<li>Export your playlist as CSV</li>
+						<li>Upload the CSV here</li>
+					</ol>
+					<div class="mode-action">
+						<div class="upload-section">
+							<input type="file" accept=".csv" id="csvUploadInput" style="display: none;" />
+							<label for="csvUploadInput" class="upload-zone upload-zone-compact" id="uploadZone">
+								<div class="upload-icon">
+									<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+										<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+										<polyline points="17 8 12 3 7 8"></polyline>
+										<line x1="12" y1="3" x2="12" y2="15"></line>
+									</svg>
+								</div>
+								<div class="upload-text">Upload CSV</div>
+								<div class="upload-hint">Drop a file or click to browse</div>
+							</label>
+							<div id="uploadStatus" class="upload-status" style="display: none;"></div>
+						</div>
+					</div>
+				</article>
+			</div>
+
+			<div id="error" class="error-message" style="display: none;"></div>
+			<p id="subtitle" class="playlists-status"></p>
+			<div id="playlistsContainer"></div>
+		</section>
+
+		<!-- Feature 2: listening history exploration -->
+		<section class="feature-section" id="listening-history">
+			<header class="feature-header">
+				<p class="feature-eyebrow">Feature 02</p>
+				<h2 class="feature-title">Listening Data Exploration</h2>
+				<p class="feature-lead">
+					A playlist shows what you saved. Your streaming history shows what you actually played.
+					Load the Extended Streaming History from Spotify's official data download to explore years of plays,
+					with all processing done in your browser.
+				</p>
+			</header>
+
+			<div class="feature-highlights">
+				<div class="feature-highlight">
+					<h3>Habits &amp; rhythm</h3>
+					<p>Listening time over days, weeks and years, a weekday × hour listening clock, streaks and session lengths.</p>
+				</div>
+				<div class="feature-highlight">
+					<h3>Taste &amp; discovery</h3>
+					<p>Top artists and tracks, how concentrated your taste is, and how many new artists you discover each month.</p>
+				</div>
+				<div class="feature-highlight">
+					<h3>Attention &amp; obsessions</h3>
+					<p>Skip and completion rates, on-repeat streaks, comeback tracks, plus platforms and countries over time.</p>
+				</div>
+			</div>
+
+			<div class="feature-cta">
+				<ol class="feature-cta-steps">
+					<li>Request <strong>Extended streaming history</strong> at <a href="https://www.spotify.com/account/privacy/" target="_blank" rel="noopener">spotify.com/account/privacy</a></li>
+					<li>Wait for Spotify's email (can take up to ~30 days)</li>
+					<li>Upload the <code>Streaming_History_*.json</code> files</li>
+				</ol>
+				<a href="spotify-data.html" class="btn btn-primary">Explore Listening Data</a>
+			</div>
+		</section>
+	</main>
+
+	<!-- Footer -->
+	<footer class="main-footer">
+		<div class="footer-content">
+			<p class="footer-text">
+				<span>Nexporify - Open Source Music Analytics</span>
+				<a href="https://github.com/visheshvs/nexportify" target="_blank" rel="noopener">View on GitHub</a>
+			</p>
+			<p class="footer-credit">
+				Based on original work by <a href="https://github.com/pavelkomarov/exportify" target="_blank" rel="noopener">pavelkomarov/exportify</a>
+			</p>
+		</div>
+	</footer>
+
+	<script>
+		// CSV Upload handling
+		function setupCSVUpload() {
+			const fileInput = document.getElementById('csvUploadInput');
+			const uploadZone = document.getElementById('uploadZone');
+			const uploadStatus = document.getElementById('uploadStatus');
+
+			if (!fileInput || !uploadZone) return;
+
+			// File input change handler
+			fileInput.addEventListener('change', function(e) {
+				const file = e.target.files[0];
+				if (file) {
+					handleFileUpload(file);
+				}
+				fileInput.value = ''; // allow re-uploading the same file
+			});
+
+			// Drag and drop handlers
+			uploadZone.addEventListener('dragover', function(e) {
+				e.preventDefault();
+				uploadZone.classList.add('dragover');
+			});
+
+			uploadZone.addEventListener('dragleave', function(e) {
+				e.preventDefault();
+				uploadZone.classList.remove('dragover');
+			});
+
+			uploadZone.addEventListener('drop', function(e) {
+				e.preventDefault();
+				uploadZone.classList.remove('dragover');
+
+				const file = e.dataTransfer.files[0];
+				if (file) {
+					handleFileUpload(file);
+				}
+			});
+
+			function handleFileUpload(file) {
+				// Validate file type
+				if (!file.name.toLowerCase().endsWith('.csv')) {
+					if (uploadStatus) {
+						uploadStatus.className = 'upload-status error';
+						uploadStatus.style.display = 'block';
+						uploadStatus.textContent = '✗ Please upload a CSV file';
+						setTimeout(() => { uploadStatus.style.display = 'none'; }, 3000);
+					}
+					return;
+				}
+
+				// Validate file size (10MB limit)
+				if (file.size > 10 * 1024 * 1024) {
+					if (uploadStatus) {
+						uploadStatus.className = 'upload-status error';
+						uploadStatus.style.display = 'block';
+						uploadStatus.textContent = '✗ File too large. Maximum size is 10MB';
+						setTimeout(() => { uploadStatus.style.display = 'none'; }, 3000);
+					}
+					return;
+				}
+
+				// Process the file
+				PlaylistExporter.analyzeFromUpload(file);
+			}
+		}
+
+		const originalOnload = window.onload;
+		window.onload = async function() {
+			// Setup CSV upload first so it works even while the Spotify session is still loading
+			setupCSVUpload();
+			if (originalOnload) await originalOnload();
+		};
+	</script>
 </body>
 </html>

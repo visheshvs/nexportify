@@ -2,3 +2,11 @@
 .ipynb_checkpoints
 .~*
 .DS_Store
+
+# Personal notes and TODO (not tracked)
+NOTES.md
+TODO.md
+PERSONAL_*.md
+# Local exploration / app data (do not commit)
+data/
+
