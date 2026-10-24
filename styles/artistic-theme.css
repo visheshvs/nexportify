@@ -2266,8 +2266,13 @@ html {
   scroll-behavior: smooth;
 }
 
+/* nav.js focuses the section it scrolls to (for keyboard users); no outline box around a whole section */
+section[tabindex="-1"]:focus {
+  outline: none;
+}
+
 .home-page .feature-section {
-  scroll-margin-top: 96px; /* keep section headings clear of the fixed header */
+  scroll-margin-top: 132px; /* fixed header (~115px) + 16px gap, matching nav.js */
 }
 
 .header-content {
@@ -2630,7 +2635,7 @@ body.signed-in .signed-in-note {
   }
 
   .home-page .feature-section {
-    scroll-margin-top: 120px;
+    scroll-margin-top: 146px; /* header wraps to two rows (~129px) */
   }
 }
 
