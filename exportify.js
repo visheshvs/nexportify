@@ -171,11 +171,13 @@ const utils = {
 
 	// Logging out of Spotify is much like logging in: You have to navigate to a certain url. But unlike logging in, there is
 	// no way to redirect back to my home page. So open the logout page in a new tab, then redirect to the homepage after a
-	// second, which is almost always long enough for the logout request to go through. Scratch that: just wipe data and reload page.
+	// second, which is almost always long enough for the logout request to go through.
 	logout() {
 		localStorage.clear() // otherwise when the page is reloaded it still just finds and uses the access_token
-		// Logout: redirect to home page, maintaining subdirectory path
-		location = location.origin + location.pathname.split('#')[0].split('?')[0] //let logout = open("https://www.spotify.com/logout"); setTimeout(() => {logout.close(); location = location.origin + location.pathname}, 1000)
+		// Spotify's re-authentication rules make a real logout matter, so open Spotify's logout page briefly, then
+		// return home, maintaining subdirectory path
+		let logout = open("https://www.spotify.com/logout")
+		setTimeout(() => { logout?.close(); location = location.origin + location.pathname.split('#')[0].split('?')[0] }, 1000)
 	}
 }
 
@@ -220,36 +222,53 @@ class PlaylistTable extends React.Component {
 		let library = await utils.apiCall("https://api.spotify.com/v1/me/tracks?offset=0&limit=1")
 
 		// fake a playlist-like structure for the liked songs, so it plays well with the rest of the code
-		let liked_songs = {name: "Liked Songs", external_urls: {spotify: "https://open.spotify.com/collection/tracks"},
+		let liked_songs = {name: "Liked Songs", id: "liked_songs", external_urls: {spotify: "https://open.spotify.com/collection/tracks"},
 			images:[{url: "liked_songs.jpeg"}], owner: {id: user.id, external_urls: {spotify: user.external_urls?.spotify}},
 			tracks: {total: library.total, href: "https://api.spotify.com/v1/me/tracks"}}
-		let playlists = [[liked_songs]] // double list so .flat() flattens everything right later
+
+		// fake a playlist-like structure for saved albums, except we have to fetch all now to count tracks, and there is no href.
+		// Optional: if Spotify refuses the albums endpoint, still show everything else.
+		let saved_albums = null
+		try {
+			let response = await utils.apiCall("https://api.spotify.com/v1/me/albums?limit=50&offset=0")
+			let albums = [response.items]
+			for (let offset = 50; offset < response.total; offset += 50) {
+				albums.push(utils.apiCall("https://api.spotify.com/v1/me/albums?limit=50&offset=" + offset, 2*offset-100).then(response => response.items))
+			}
+			albums = (await Promise.all(albums)).flat() // flatten list of lists into just a list
+			let songs = [], record_labels = {} // save record labels too, so csvData doesn't have to query albums again
+			for (let a of albums.filter(Boolean)) {
+				record_labels[a.album.id] = a.album.label
+				for (let tracks = a.album.tracks; tracks; tracks = tracks.next && await utils.apiCall(tracks.next)) { // if there is a tracks.next, follow it
+					songs.push(...tracks.items.map(track => ({id: track.id, added_at: a.added_at}))) // added_at is when the album was saved
+				}
+			}
+			saved_albums = {name: "Saved Albums", id: "saved_albums", external_urls: {spotify: "https://open.spotify.com/collection/albums"},
+				images:[{url: "saved_albums.png"}], owner: {id: user.id, external_urls: {spotify: user.external_urls?.spotify}},
+				tracks: {total: songs.length}, songs: songs, record_labels: record_labels}
+		} catch (e) {
+			console.warn('Could not load saved albums; skipping them.', e)
+		}
+		let playlists = [[liked_songs, saved_albums].filter(Boolean)] // double list so .flat() flattens everything right
 
 		// Compose a list of all the user's playlists by querying the playlists endpoint. Their total number of playlists
 		// needs to be garnered from a response, so await the first response, then send a volley of requests to get the rest.
 		// https://developer.spotify.com/documentation/web-api/reference/get-list-users-playlists
 		let response = await utils.apiCall("https://api.spotify.com/v1/me/playlists?limit=50&offset=0")
 		playlists.push(response.items.filter(p => p).map(PlaylistTable.normalizePlaylist))
-		let requests = []
 		for (let offset = 50; offset < response.total; offset += 50) {
-			requests.push(utils.apiCall("https://api.spotify.com/v1/me/playlists?limit=50&offset=" + offset, 2*offset-100))
+			playlists.push(utils.apiCall("https://api.spotify.com/v1/me/playlists?limit=50&offset=" + offset, 2*offset-100)
+				.then(response => response.items.filter(p => p).map(PlaylistTable.normalizePlaylist)))
 		}
-		await Promise.all(requests).then(responses => responses.map(response =>
-			playlists.push(response.items.filter(p => p).map(PlaylistTable.normalizePlaylist))))
+		playlists = (await Promise.all(playlists)).flat() // flatten list of lists into just a list
 
 		//add info to this Component's state. Use setState() so render() gets called again.
-		const flatPlaylists = playlists.flat();
 		this.setState({ 
-			playlists: flatPlaylists,
-			allPlaylists: flatPlaylists // Keep original for filtering
-		}) // flatten list of lists into just a list
+			playlists: playlists,
+			allPlaylists: playlists // Keep original for filtering
+		})
 		if (subtitle) {
-			subtitle.textContent = flatPlaylists.length + ' playlists discovered'
-		}
-		// Show explore button
-		const exploreButtonContainer = document.getElementById('exploreButtonContainer');
-		if (exploreButtonContainer) {
-			exploreButtonContainer.style.display = 'block';
+			subtitle.textContent = playlists.length + ' playlists discovered'
 		}
 	}
 
@@ -672,11 +691,11 @@ let PlaylistExporter = {
 	// Handles exporting all playlist data as a zip file
 	async exportAll(playlists) {
 		const exportAllBtn = document.getElementById("exportAll")
-		if (exportAllBtn) exportAllBtn.textContent = 'Exporting...' // spinner on button
 		utils.showError("")
 		let zip = new JSZip()
 
-		for (let playlist of playlists) {
+		for (let [i, playlist] of playlists.entries()) {
+			if (exportAllBtn) exportAllBtn.textContent = 'Exporting ' + (i+1) + '/' + playlists.length + '…' // progress on button
 			try {
 				let csv = await this.csvData(playlist)
 				let fileName = this.fileName(playlist)
@@ -718,11 +737,17 @@ let PlaylistExporter = {
 	// This is where the magic happens. The access token gives us permission to query this info from Spotify, and the
 	// playlist object gives us all the information we need to start asking for songs.
 	async csvData(playlist) {
-		let increment = playlist.name == "Liked Songs" ? 50 : 100 // Can max call for only 50 tracks at a time vs 100 for playlists
+		let increment = ["liked_songs", "saved_albums"].includes(playlist.id) ? 50 : 100 // Can max call for only 50 tracks at a time vs 100 for playlists
 
-		// Make asynchronous API calls for 100 songs at a time, and put the results (all Promises) in a list.
+		// Make asynchronous API calls for `increment` songs at a time, and put the results (all Promises) in a list.
 		let requests = []
-		for (let offset = 0; offset < playlist.tracks.total; offset += increment) {
+		if (playlist.id == "saved_albums") { // tracks known, but we want more details, and saved albums have no href to page through
+			requests.push(this.fetchByIds('tracks', playlist.songs.map(song => song.id), increment, 100).then(tracks => {
+				let byId = Object.fromEntries(tracks.map(track => [track.id, track]))
+				return { items: playlist.songs.map(song => ({ track: byId[song.id], added_at: song.added_at })) }
+			}))
+		}
+		else for (let offset = 0; offset < playlist.tracks.total; offset += increment) {
 			requests.push(utils.apiCall(playlist.tracks.href + '?offset=' + offset + '&limit=' + increment, (offset/increment)*100)) // I'm spacing requests by 100ms regardless of increment.
 		}
 		// "returns a single Promise that resolves when all of the promises passed as an iterable have resolved"
@@ -740,9 +765,10 @@ let PlaylistExporter = {
 					// For robustness to missing data, null-checking question marks abound. Artists are separated with
 					// semicolons so commas can be preserved in their names without confusion.
 					return ['"'+song.track?.artists?.map(artist => { return artist?.id }).join(',')+'"', song.track?.album?.id, song.track?.uri,
-						'"'+song.track?.name?.replace(/"/g,'""')+'"', '"'+song.track?.album?.name?.replace(/"/g,'""')+'"',
+						song.track?.external_ids?.isrc, '"'+song.track?.name?.replace(/"/g,'""')+'"', '"'+song.track?.album?.name?.replace(/"/g,'""')+'"',
 						'"'+song.track?.artists?.map(artist => { return artist?.name?.replace(/"/g,'""').replace(/;/g,'') }).join(';')+'"',
-						song.track?.album?.release_date, song.track?.duration_ms, song.track?.popularity, song.track?.explicit, song.added_by?.id, song.added_at]
+						song.track?.album?.release_date, song.track?.duration_ms, song.track?.popularity, song.track?.explicit,
+						song.added_by?.id ?? playlist.owner.id, song.added_at]
 				})
 			})
 		})
@@ -758,6 +784,7 @@ let PlaylistExporter = {
 
 		// Fetch album details, another wave of traffic, 20 albums at a time max. Happens after genre_promise has finished, to build in delay.
 		let album_promise = Promise.all([data_promise, genre_promise]).then(() =>
+			playlist.id == "saved_albums" ? playlist.record_labels : // already got these in init()
 			this.fetchByIds('albums', Array.from(album_ids), 20, 120).then(albums => {
 				let record_labels = {} // analogous to genres
 				albums.forEach(album => { if (album) { record_labels[album.id] = album.label ?? '' } })
@@ -876,7 +903,7 @@ let PlaylistExporter = {
 				}
 			})
 			// make a string
-			let csv = "Track URI,Track Name,Album Name,Artist Name(s),Release Date,Duration (ms),Popularity,Explicit,Added By,Added At,Genres,Record Label,Danceability,Energy,Key,Loudness,Mode,Speechiness,Acousticness,Instrumentalness,Liveness,Valence,Tempo,Time Signature\n"
+			let csv = "Track URI,ISRC,Track Name,Album Name,Artist Name(s),Release Date,Duration (ms),Popularity,Explicit,Added By,Added At,Genres,Record Label,Danceability,Energy,Key,Loudness,Mode,Speechiness,Acousticness,Instrumentalness,Liveness,Valence,Tempo,Time Signature\n"
 			data.forEach(row => { csv += row.join(",") + "\n" })
 			return csv
 		})
