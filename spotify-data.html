@@ -19,7 +19,7 @@
 	<script src="FileSaver.js"></script>
 </head>
 
-<body>
+<body class="data-page">
 	<div class="abstract-shape shape-1"></div>
 	<div class="abstract-shape shape-2"></div>
 	<div class="abstract-shape shape-3"></div>
@@ -34,118 +34,26 @@
 		</div>
 	</header>
 
-	<section class="hero-section data-page-hero">
-		<div class="hero-background"></div>
-		<div class="hero-content">
-			<p class="data-cta-eyebrow">Spotify Personal Data</p>
-			<h1 class="hero-title">Listening Data<br/>Exploration</h1>
-			<p class="hero-subtitle">Request Extended Streaming History, then explore it here</p>
-			<p class="hero-description-text">
-				Parse Spotify’s Extended Streaming History JSON in your browser. Filter, chart, and
-				export structured Excel. Nothing is uploaded to a server.
-			</p>
-		</div>
+	<section class="data-page-hero">
+		<p class="feature-eyebrow">Feature 02 · Listening History</p>
+		<h1 class="data-page-title">Listening Data Exploration</h1>
+		<p class="data-page-lead">
+			Load the Extended Streaming History from your Spotify data download to explore years of plays:
+			habits, taste, skips and obsessions. Everything runs in your browser; nothing is uploaded.
+		</p>
 	</section>
 
 	<main class="data-page-main">
-		<section class="data-panel">
-			<h2 class="data-panel-title">How to Request Your Data</h2>
-			<p class="data-panel-lead">
-				Use Spotify’s official <strong>Download your data</strong> tool. For full listening analysis,
-				request <strong>Extended streaming history</strong> (lifetime play log with reason codes,
-				skip flags, platform, and more).
-			</p>
-
-			<ol class="data-steps">
-				<li>
-					<strong>Open Account Privacy</strong>
-					<p>
-						Sign in at
-						<a href="https://www.spotify.com/account/privacy/" target="_blank" rel="noopener">spotify.com/account/privacy</a>
-						in a web browser (not the mobile app).
-					</p>
-				</li>
-				<li>
-					<strong>Find “Download your data”</strong>
-					<p>
-						Request <strong>Extended streaming history</strong> for the richest play log.
-						Account data includes a shorter recent streaming history with fewer fields.
-					</p>
-				</li>
-				<li>
-					<strong>Request and confirm</strong>
-					<p>
-						Submit the request, then confirm via the email Spotify sends.
-						Without confirmation, the export may not start.
-					</p>
-				</li>
-				<li>
-					<strong>Wait for the download link</strong>
-					<p>
-						Extended history can take up to about 30 days. Download promptly when the email arrives —
-						links expire.
-					</p>
-				</li>
-				<li>
-					<strong>Unzip and load JSON here</strong>
-					<p>
-						Look for files named like <code>Streaming_History_Audio_*.json</code> and
-						<code>Streaming_History_Video_*.json</code>. Upload them below.
-					</p>
-				</li>
-			</ol>
-
-			<p class="data-panel-note">
-				Official references:
-				<a href="https://support.spotify.com/us/article/data-rights-and-privacy-settings/" target="_blank" rel="noopener">Data rights and privacy</a>
-				·
-				<a href="https://support.spotify.com/in-en/article/understanding-your-data/" target="_blank" rel="noopener">Understanding your data</a>
-			</p>
-		</section>
-
-		<section class="data-panel">
-			<h2 class="data-panel-title">What’s in Extended Streaming History</h2>
-			<p class="data-panel-lead">
-				Each JSON file is an array of stream objects. Music, podcasts, and audiobooks share the same
-				shape; video streams use the same fields in Video files. IP addresses may be present in the
-				raw JSON — this app never charts them and omits them from Excel export.
-			</p>
-			<div class="data-placeholder-grid">
-				<div class="data-placeholder-card">
-					<h3>Identity of the play</h3>
-					<p>
-						<code>ts</code> (UTC end time), track or episode name, artist/show, album,
-						Spotify URI, <code>ms_played</code>, platform, country.
-					</p>
+		<section class="data-setup" id="uploadSection">
+			<article class="mode-card data-upload-card">
+				<div class="mode-card-head">
+					<span class="mode-badge">Have your files?</span>
+					<h2 class="data-card-title">Load your files</h2>
+					<p class="mode-description">Upload one or more <code>Streaming_History_Audio_*.json</code> / <code>Streaming_History_Video_*.json</code> files.</p>
 				</div>
-				<div class="data-placeholder-card">
-					<h3>How it started / ended</h3>
-					<p>
-						<code>reason_start</code> / <code>reason_end</code> (e.g. trackdone, fwdbtn, endplay),
-						plus shuffle, skipped, offline, and incognito flags.
-					</p>
-				</div>
-				<div class="data-placeholder-card">
-					<h3>Content types</h3>
-					<p>
-						Music via track metadata; podcasts via episode fields; audiobooks via audiobook fields.
-						Audio vs video is inferred from the filename.
-					</p>
-				</div>
-			</div>
-		</section>
-
-		<section class="data-panel" id="uploadSection">
-			<h2 class="data-panel-title">Load Your Files</h2>
-			<p class="data-panel-lead">
-				Upload one or more Extended Streaming History <code>.json</code> files. Processing stays on
-				this device.
-			</p>
-
-			<div class="data-upload-row">
 				<div class="upload-section data-upload">
 					<input type="file" accept=".json,application/json" id="spotifyDataUpload" multiple style="display: none;" />
-					<label for="spotifyDataUpload" class="upload-zone" id="spotifyDataUploadZone">
+					<label for="spotifyDataUpload" class="upload-zone upload-zone-compact" id="spotifyDataUploadZone">
 						<div class="upload-icon">
 							<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 								<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
@@ -154,12 +62,54 @@
 							</svg>
 						</div>
 						<div class="upload-text">Upload JSON files</div>
-						<div class="upload-hint">Streaming_History_Audio / Video · multiple files OK</div>
+						<div class="upload-hint">Drop files or click to browse · multiple files OK</div>
 					</label>
 				</div>
-			</div>
-			<div id="spotifyDataUploadStatus" class="upload-status" style="display: none;"></div>
+				<div id="spotifyDataUploadStatus" class="upload-status" style="display: none;"></div>
+			</article>
+
+			<article class="mode-card data-howto-card">
+				<div class="mode-card-head">
+					<span class="mode-badge">Don't have them yet?</span>
+					<h2 class="data-card-title">Get your data from Spotify</h2>
+				</div>
+				<ol class="hero-steps">
+					<li>Open <a href="https://www.spotify.com/account/privacy/" target="_blank" rel="noopener">spotify.com/account/privacy</a> in a web browser (not the app)</li>
+					<li>Under <strong>Download your data</strong>, request <strong>Extended streaming history</strong> and confirm via the email Spotify sends</li>
+					<li>Wait for the download link (can take up to ~30 days; the link expires, so download promptly)</li>
+					<li>Unzip it and upload the <code>Streaming_History_*.json</code> files here</li>
+				</ol>
+				<p class="data-card-note">
+					Official references:
+					<a href="https://support.spotify.com/us/article/data-rights-and-privacy-settings/" target="_blank" rel="noopener">Data rights and privacy</a>
+					·
+					<a href="https://support.spotify.com/in-en/article/understanding-your-data/" target="_blank" rel="noopener">Understanding your data</a>
+				</p>
+			</article>
 		</section>
+
+		<details class="data-details">
+			<summary>What's in the Extended Streaming History files?</summary>
+			<p class="data-details-lead">
+				Each JSON file is an array of stream objects. Music, podcasts and audiobooks share the same shape; video
+				streams use the same fields in Video files. IP addresses may be present in the raw JSON; this app never
+				charts them and omits them from the Excel export.
+			</p>
+			<div class="feature-highlights">
+				<div class="feature-highlight">
+					<h3>Identity of the play</h3>
+					<p><code>ts</code> (UTC end time), track or episode name, artist/show, album, Spotify URI, <code>ms_played</code>, platform, country.</p>
+				</div>
+				<div class="feature-highlight">
+					<h3>How it started / ended</h3>
+					<p><code>reason_start</code> / <code>reason_end</code> (e.g. trackdone, fwdbtn, endplay), plus shuffle, skipped, offline and incognito flags.</p>
+				</div>
+				<div class="feature-highlight">
+					<h3>Content types</h3>
+					<p>Music via track metadata; podcasts via episode fields; audiobooks via audiobook fields. Audio vs video is inferred from the filename.</p>
+				</div>
+			</div>
+		</details>
 
 		<section class="data-panel" id="explorerSection" hidden>
 			<div class="explorer-header">
@@ -526,8 +476,9 @@
 		<div class="footer-content">
 			<p class="footer-text">
 				<span>Nexporify - Open Source Music Analytics</span>
-				<a href="https://github.com/visheshvs/exportify" target="_blank" rel="noopener">View on GitHub</a>
+				<a href="https://github.com/visheshvs/nexportify" target="_blank" rel="noopener">View on GitHub</a>
 			</p>
+			<p class="footer-made-by">Made by <a href="https://www.visheshvs.com/" target="_blank" rel="noopener">@visheshvs</a></p>
 			<p class="footer-credit">
 				Listening analysis runs locally · field reference from
 				<a href="https://support.spotify.com/in-en/article/understanding-your-data/" target="_blank" rel="noopener">Spotify Support</a>

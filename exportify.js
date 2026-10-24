@@ -8,12 +8,18 @@ const utils = {
 		return location.origin + location.pathname.replace(/index\.html$/, '').replace(/\/$/, '')
 	},
 
-	// The #error box starts hidden; reveal it whenever there's something to say.
+	// The #error box starts hidden; reveal it whenever there's something to say. It never scrolls the page itself
+	// (that fought with the user's own scrolling); callers reacting to a click can bring it into view.
 	showError(html, append=false) {
 		if (typeof error === 'undefined' || !error) return
-		error.innerHTML = append ? error.innerHTML + html : html
-		error.style.display = error.innerHTML ? 'block' : 'none'
-		if (error.innerHTML && !append) error.scrollIntoView({ behavior: 'smooth', block: 'center' })
+		let body = error.querySelector('.error-body')
+		if (!body) {
+			error.innerHTML = '<button type="button" class="error-dismiss" aria-label="Dismiss" onclick="utils.showError(\'\')">×</button>' +
+				'<div class="error-body"></div>'
+			body = error.querySelector('.error-body')
+		}
+		body.innerHTML = append ? body.innerHTML + html : html
+		error.style.display = body.innerHTML ? 'block' : 'none'
 	},
 
 	getTokenAgeMs() {
@@ -201,9 +207,12 @@ class PlaylistTable extends React.Component {
 				  '(and the owner needs Spotify Premium). You can still use <strong>Advanced Analysis</strong> by uploading a CSV ' +
 				  'from <a href="https://exportify.net" target="_blank" rel="noopener">exportify.net</a>.</p>'
 				: ''
+			// Forget this session so a refresh or new tab starts clean instead of repeating the same failure
+			for (let key of ['access_token', 'access_token_timestamp', 'refresh_token']) localStorage.removeItem(key)
 			utils.showError('<p><strong>Couldn\'t load your playlists.</strong> ' + PlaylistExporter.escapeHtml(msg) + '</p>' + hint +
-				'<p><button class="btn btn-action" onclick="utils.logout()">Sign out and try again</button></p>')
+				'<p>You\'ve been signed out here; use Sign In with Spotify to try again.</p>')
 			ReactDOM.unmountComponentAtNode(playlistsContainer)
+			showSignedOut()
 		}
 	}
 
@@ -586,10 +595,16 @@ let PlaylistExporter = {
 			win.document.close()
 			return true
 		}
-		const target = statusEl || error
-		if (statusEl) statusEl.className = 'upload-status success'
-		target.innerHTML = 'Your analysis is ready. <button type="button" class="btn btn-action">Open analysis</button>'
-		target.style.display = 'block'
+		const message = 'Your analysis is ready. <button type="button" class="btn btn-action">Open analysis</button>'
+		let target = statusEl
+		if (statusEl) {
+			statusEl.className = 'upload-status success'
+			statusEl.innerHTML = message
+			statusEl.style.display = 'block'
+		} else {
+			utils.showError(message)
+			target = error.querySelector('.error-body')
+		}
 		target.querySelector('button').onclick = () => {
 			const w = window.open('', '_blank')
 			if (!w) { target.textContent = 'Please allow pop-ups for this site to view the analysis.'; return }
@@ -663,6 +678,7 @@ let PlaylistExporter = {
 		} catch (e) {
 			utils.showError("Couldn't export " + this.escapeHtml(playlist.name) + ". Encountered <tt>" + this.escapeHtml(String(e)) + "</tt><br/>" +
 					'Please <a href="https://github.com/visheshvs/nexportify/issues">let us know</a>.', true)
+			error.scrollIntoView({ block: 'nearest' })
 		} finally { // change back the export button's text
 			const exportBtnReset = document.getElementById("export"+row)
 			if (exportBtnReset) exportBtnReset.textContent = 'Export'
@@ -682,6 +698,7 @@ let PlaylistExporter = {
 			if (reportWindow) reportWindow.close()
 			utils.showError("Couldn't analyze " + this.escapeHtml(playlist.name) + ". Encountered <tt>" + this.escapeHtml(String(e)) + "</tt><br/>" +
 					'Please <a href="https://github.com/visheshvs/nexportify/issues">let us know</a>.', true)
+			error.scrollIntoView({ block: 'nearest' })
 		} finally { // change back the analyze button's text
 			const analyzeBtnReset = document.getElementById("analyze"+row)
 			if (analyzeBtnReset) analyzeBtnReset.textContent = 'Analyze'
@@ -1527,8 +1544,9 @@ let PlaylistExporter = {
 		<div class="footer-content" style="max-width: 1400px; margin: 0 auto; padding: 0 var(--space-xl); text-align: center;">
 			<p class="footer-text" style="font-size: var(--text-base); color: var(--text-secondary); margin-bottom: var(--space-sm); display: flex; align-items: center; justify-content: center; gap: var(--space-sm); flex-wrap: wrap;">
 				<span style="color: var(--text-primary); font-weight: var(--font-weight-semibold);">Nexporify - Open Source Music Analytics</span>
-				<a href="https://github.com/visheshvs/exportify" target="_blank" rel="noopener" style="color: var(--accent-primary); text-decoration: none; transition: color 0.3s ease;">View on GitHub</a>
+				<a href="https://github.com/visheshvs/nexportify" target="_blank" rel="noopener" style="color: var(--accent-primary); text-decoration: none; transition: color 0.3s ease;">View on GitHub</a>
 			</p>
+			<p class="footer-made-by" style="font-size: var(--text-sm); color: var(--text-secondary); margin-bottom: var(--space-xs);">Made by <a href="https://www.visheshvs.com/" target="_blank" rel="noopener" style="color: var(--accent-primary); text-decoration: none;">@visheshvs</a></p>
 			<p class="footer-credit" style="font-size: var(--text-sm); color: var(--text-tertiary);">
 				Based on original work by <a href="https://github.com/pavelkomarov/exportify" target="_blank" rel="noopener" style="color: var(--accent-primary); text-decoration: none; transition: color 0.3s ease;">pavelkomarov/exportify</a>
 			</p>
@@ -4206,8 +4224,9 @@ let PlaylistExporter = {
 		<div class="footer-content" style="max-width: 1400px; margin: 0 auto; padding: 0 var(--space-xl); text-align: center;">
 			<p class="footer-text" style="font-size: var(--text-base); color: var(--text-secondary); margin-bottom: var(--space-sm); display: flex; align-items: center; justify-content: center; gap: var(--space-sm); flex-wrap: wrap;">
 				<span style="color: var(--text-primary); font-weight: var(--font-weight-semibold);">Nexporify - Open Source Music Analytics</span>
-				<a href="https://github.com/visheshvs/exportify" target="_blank" rel="noopener" style="color: var(--accent-primary); text-decoration: none; transition: color 0.3s ease;">View on GitHub</a>
+				<a href="https://github.com/visheshvs/nexportify" target="_blank" rel="noopener" style="color: var(--accent-primary); text-decoration: none; transition: color 0.3s ease;">View on GitHub</a>
 			</p>
+			<p class="footer-made-by" style="font-size: var(--text-sm); color: var(--text-secondary); margin-bottom: var(--space-xs);">Made by <a href="https://www.visheshvs.com/" target="_blank" rel="noopener" style="color: var(--accent-primary); text-decoration: none;">@visheshvs</a></p>
 			<p class="footer-credit" style="font-size: var(--text-sm); color: var(--text-tertiary);">
 				Based on original work by <a href="https://github.com/pavelkomarov/exportify" target="_blank" rel="noopener" style="color: var(--accent-primary); text-decoration: none; transition: color 0.3s ease;">pavelkomarov/exportify</a>
 			</p>
@@ -4281,6 +4300,13 @@ onload = async () => {
 	// Coming back from Spotify lands at the top of the page; take the user to where their playlists will appear.
 	const playlistSection = document.getElementById('playlist-metadata')
 	if ((code || authError) && playlistSection) playlistSection.scrollIntoView()
+}
+
+function showSignedOut() {
+	document.body.classList.remove('signed-in')
+	if (loginButton) loginButton.style.display = ''
+	if (logoutContainer) logoutContainer.innerHTML = ''
+	if (subtitle) subtitle.textContent = ''
 }
 
 function showSignedIn() {
